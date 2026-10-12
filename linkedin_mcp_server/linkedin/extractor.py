@@ -18,6 +18,7 @@ from linkedin_mcp_server.linkedin.contracts import (
 )
 from linkedin_mcp_server.linkedin.conversations import ConversationReader
 from linkedin_mcp_server.linkedin.feed import FeedReader
+from linkedin_mcp_server.linkedin.invitations import InvitationKind, InvitationReader
 from linkedin_mcp_server.linkedin.job_pages import JobPageReader
 from linkedin_mcp_server.linkedin.job_policy import JobsTrackerStage
 from linkedin_mcp_server.linkedin.jobs import JobReader
@@ -69,6 +70,7 @@ class LinkedInExtractor:
         self._conversations = ConversationReader(
             session, navigator, content, profile_page
         )
+        self._invitations = InvitationReader(session, navigator, content)
 
     async def get_page_text(self) -> str:
         """Extract innerText from the main content area of the current page."""
@@ -247,6 +249,12 @@ class LinkedInExtractor:
     ) -> dict[str, Any]:
         """Search messages by keyword."""
         return await self._conversations.search_conversations(keywords, limit)
+
+    async def get_pending_invitations(
+        self, limit: int = 20, kind: InvitationKind = "received"
+    ) -> dict[str, Any]:
+        """List pending network invitations, received or sent."""
+        return await self._invitations.get_pending_invitations(limit, kind)
 
     async def send_message(
         self,
