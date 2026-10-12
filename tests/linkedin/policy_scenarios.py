@@ -1030,6 +1030,8 @@ async def _pending_invitations_scenario() -> dict[str, Any]:
     recorder = TraceRecorder(name, _COMMON_ALLOWED)
     clock = FakeClock(recorder)
     page = _page(recorder)
+    page.script("evaluate:invitation_load_more", 100, None)
+    page.script("evaluate:main_text_length", 180)
     page.script("evaluate:invitation_notes_expand", 1, 0)
     page.script(
         "evaluate:root_content",
@@ -1042,7 +1044,7 @@ async def _pending_invitations_scenario() -> dict[str, Any]:
         ),
     )
     extractor = _extractor(page)
-    arguments = {"limit": 1, "kind": "sent"}
+    arguments = {"limit": 25, "kind": "sent"}
     async with boundaries(recorder, clock):
         with recorder.context("get_pending_invitations", "invitations"):
             result = await extractor.get_pending_invitations(**arguments)

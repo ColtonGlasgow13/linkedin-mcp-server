@@ -2481,17 +2481,17 @@ class TestNetworkTools:
         register_network_tools(mcp)
 
         serve_extractor(mock_extractor)
-        await mcp.call_tool("get_pending_invitations", {"limit": 100, "kind": "sent"})
+        await mcp.call_tool("get_pending_invitations", {"limit": 500, "kind": "sent"})
 
         mock_extractor.get_pending_invitations.assert_awaited_once_with(
-            limit=100, kind="sent"
+            limit=500, kind="sent"
         )
 
     @pytest.mark.parametrize(
         ("arguments", "field"),
         [
             ({"kind": "archived"}, "kind"),
-            ({"limit": 101}, "limit"),
+            ({"limit": 501}, "limit"),
             ({"limit": 0}, "limit"),
         ],
     )
