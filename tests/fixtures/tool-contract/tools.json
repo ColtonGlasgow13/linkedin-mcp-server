@@ -552,6 +552,48 @@
     "title": "Get My Profile"
   },
   {
+    "name": "get_pending_invitations",
+    "title": "Get Pending Invitations",
+    "description": "List pending LinkedIn connection invitations, received or sent.\n\nReads /mynetwork/invitation-manager/{received|sent}/. A sent invitation\nthat is no longer listed was accepted or withdrawn; LinkedIn shows a\ndeclined one as still pending. Truncated invitation notes are expanded\nbefore reading. Read-only: nothing is accepted, ignored or withdrawn.",
+    "inputSchema": {
+      "properties": {
+        "limit": {
+          "default": 20,
+          "maximum": 100,
+          "minimum": 1,
+          "type": "integer",
+          "description": "Maximum number of invitations to return (1-100, default 20).\nReferences are capped exactly; the text is trimmed at the first\nomitted invitation."
+        },
+        "kind": {
+          "default": "received",
+          "enum": [
+            "received",
+            "sent"
+          ],
+          "type": "string",
+          "description": "\"received\" (default) for invitations to you, \"sent\" for your\noutgoing invitations awaiting a response."
+        }
+      },
+      "type": "object",
+      "additionalProperties": false
+    },
+    "outputSchema": {
+      "type": "object",
+      "additionalProperties": true
+    },
+    "annotations": {
+      "readOnlyHint": true,
+      "openWorldHint": true
+    },
+    "_meta": {
+      "fastmcp": {
+        "tags": [
+          "network"
+        ]
+      }
+    }
+  },
+  {
     "_meta": {
       "fastmcp": {
         "tags": [

@@ -64,6 +64,10 @@
         "coroutine": true,
         "signature": "(self) -> 'str'"
       },
+      "get_pending_invitations": {
+        "coroutine": true,
+        "signature": "(self, limit: 'int' = 20, kind: 'InvitationKind' = 'received') -> 'dict[str, Any]'"
+      },
       "get_saved_jobs": {
         "coroutine": true,
         "signature": "(self, max_pages: 'int' = 3, stage: 'JobsTrackerStage' = 'saved') -> 'dict[str, Any]'"
@@ -121,6 +125,7 @@
       "get_inbox",
       "get_job_apply_url",
       "get_my_profile",
+      "get_pending_invitations",
       "get_saved_jobs",
       "get_sidebar_profiles",
       "read_company",
@@ -475,6 +480,34 @@
               ],
               "default": null,
               "description": "Comma-separated list of extra sections to read.\nThe main profile page is always included.\nAvailable sections: experience, education, interests, honors, volunteering, languages, certifications, skills, projects, contact_info, posts\nExamples: \"experience,education\", \"contact_info\", \"skills,projects\"\nDefault (None) reads only the main profile page."
+            }
+          },
+          "type": "object"
+        },
+        "output": {
+          "additionalProperties": true,
+          "type": "object"
+        }
+      },
+      "get_pending_invitations": {
+        "input": {
+          "additionalProperties": false,
+          "properties": {
+            "kind": {
+              "default": "received",
+              "description": "\"received\" (default) for invitations to you, \"sent\" for your\noutgoing invitations awaiting a response.",
+              "enum": [
+                "received",
+                "sent"
+              ],
+              "type": "string"
+            },
+            "limit": {
+              "default": 20,
+              "description": "Maximum number of invitations to return (1-100, default 20).\nReferences are capped exactly; the text is trimmed at the first\nomitted invitation.",
+              "maximum": 100,
+              "minimum": 1,
+              "type": "integer"
             }
           },
           "type": "object"
