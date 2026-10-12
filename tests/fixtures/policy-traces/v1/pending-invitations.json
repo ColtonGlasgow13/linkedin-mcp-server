@@ -2,7 +2,7 @@
   "call": {
     "arguments": {
       "kind": "sent",
-      "limit": 1
+      "limit": 25
     },
     "method": "get_pending_invitations"
   },
@@ -84,11 +84,43 @@
       "section": "invitations"
     },
     {
-      "actual_scrolls": 2,
+      "arg": {
+        "labels": [
+          "Load more",
+          "Show more"
+        ]
+      },
       "call": "get_pending_invitations",
-      "kind": "boundary.scroll_body",
-      "max_scrolls": 1,
-      "pause_time": 0.5,
+      "kind": "evaluate",
+      "operation": "invitation_load_more",
+      "program_digest": "a2a7297120d8",
+      "section": "invitations"
+    },
+    {
+      "call": "get_pending_invitations",
+      "kind": "sleep",
+      "reason": "sleep",
+      "seconds": 1.5,
+      "section": "invitations"
+    },
+    {
+      "call": "get_pending_invitations",
+      "kind": "evaluate",
+      "operation": "main_text_length",
+      "program_digest": "39cb2c9e45fb",
+      "section": "invitations"
+    },
+    {
+      "arg": {
+        "labels": [
+          "Load more",
+          "Show more"
+        ]
+      },
+      "call": "get_pending_invitations",
+      "kind": "evaluate",
+      "operation": "invitation_load_more",
+      "program_digest": "a2a7297120d8",
       "section": "invitations"
     },
     {
@@ -126,6 +158,12 @@
           "kind": "person",
           "text": "Ada Lovelace",
           "url": "/in/ada/"
+        },
+        {
+          "context": "invitation",
+          "kind": "person",
+          "text": "Bob Stall",
+          "url": "/in/bob/"
         }
       ]
     },
@@ -133,7 +171,7 @@
       "invitations"
     ],
     "sections": {
-      "invitations": "Ada Lovelace\nSent 3 weeks ago"
+      "invitations": "Ada Lovelace\nSent 3 weeks ago\n\nBob Stall\nSent 1 week ago"
     },
     "url": "https://www.linkedin.com/mynetwork/invitation-manager/sent/"
   },

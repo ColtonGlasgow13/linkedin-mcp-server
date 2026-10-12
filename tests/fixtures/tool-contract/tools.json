@@ -453,10 +453,10 @@
       "properties": {
         "limit": {
           "default": 20,
-          "maximum": 100,
+          "maximum": 500,
           "minimum": 1,
           "type": "integer",
-          "description": "Maximum number of invitations to return (1-100, default 20).\nReferences are capped exactly; the text is trimmed at the first\nomitted invitation."
+          "description": "Maximum number of invitations to return (1-500, default 20).\nReferences are capped exactly; the text is trimmed at the first\nomitted invitation."
         },
         "kind": {
           "default": "received",

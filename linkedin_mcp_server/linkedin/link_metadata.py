@@ -120,10 +120,10 @@ _REFERENCE_CAPS = {
     # Kept in sync with the literal cap=50 in feed_payload.build_feed_references
     # where SDUI-derived /posts/<slug> permalinks are appended.
     "feed": 50,
-    # Headroom for get_pending_invitations' limit ceiling (Field(ge=1, le=100)).
+    # Headroom for get_pending_invitations' limit ceiling (Field(ge=1, le=500)).
     # The reader slices to the per-call limit itself; under the default cap of
     # 12 anything above 12 invitations was silently dropped.
-    "invitations": 100,
+    "invitations": 500,
 }
 
 # A label must carry at least one letter or digit in any script, so the class is

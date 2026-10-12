@@ -81,6 +81,35 @@ _RECEIVED_COUNT_IS_ZERO_JS = r"""() => {
 }"""
 
 
+# The manager renders ten cards and a "Load more" button, not an infinite
+# scroll: measured live on the sent page 2026-10-12 (45 pending, 10 rendered
+# after scrolling). The button carries no attribute that tells it apart from
+# the card buttons, so its visible text is the only signal. The browser locale
+# is forced to en-US (see BrowserManager); any other locale finds no button
+# and the read stops at the first ten cards rather than clicking a guess.
+_LOAD_MORE_LABELS = ("Load more", "Show more")
+_LOAD_MORE_JS = """({ labels }) => {
+    const main = document.querySelector('main');
+    if (!main) return null;
+    const normalize = value => (value || '').replace(/\\s+/g, ' ').trim();
+    const button = Array.from(main.querySelectorAll('button')).find(
+        candidate => labels.includes(normalize(candidate.innerText))
+            && !candidate.disabled
+    );
+    if (!button) return null;
+    const before = main.innerText.length;
+    button.click();
+    return before;
+}"""
+_MAIN_TEXT_LENGTH_JS = """() => {
+    const main = document.querySelector('main');
+    return main ? main.innerText.length : 0;
+}"""
+# Cards per "Load more" page, measured with the limit above.
+_CARDS_PER_PAGE = 10
+_LOAD_MORE_PAUSE = 1.5
+
+
 def invitation_manager_url(kind: InvitationKind) -> str:
     """Return the invitation-manager page for one direction."""
     return f"https://www.linkedin.com/mynetwork/invitation-manager/{kind}/"
@@ -181,13 +210,33 @@ class InvitationReader:
             logger.debug("Failed to read received invitation count: %s", exc)
             return False
 
+    async def _load_more_cards(self, limit: int) -> int:
+        """Click "Load more" until ``limit`` cards could be on the page.
+
+        Stops early when the button is gone or a click adds no text. Returns
+        the number of clicks that loaded something.
+        """
+        loaded = 0
+        for _ in range(max(0, -(-limit // _CARDS_PER_PAGE) - 1)):
+            before = await self._session.run_on_linkedin(
+                _LOAD_MORE_JS, {"labels": list(_LOAD_MORE_LABELS)}
+            )
+            if before is None:
+                break
+            await self._session.delay(_LOAD_MORE_PAUSE)
+            after = await self._session.run_on_linkedin(_MAIN_TEXT_LENGTH_JS)
+            if not isinstance(after, int) or after <= before:
+                break
+            loaded += 1
+        return loaded
+
     async def get_pending_invitations(
         self, limit: int = 20, kind: InvitationKind = "received"
     ) -> dict[str, Any]:
         """List pending invitations in one direction.
 
         ``limit`` caps the returned references exactly and sets how many
-        screenfuls are scrolled in; the section text is trimmed to match.
+        "Load more" pages are fetched; the section text is trimmed to match.
         """
         url = invitation_manager_url(kind)
         await self._navigator._navigate_to_page(url)
@@ -195,8 +244,7 @@ class InvitationReader:
         await self._wait_for_main_text()
         await self._session.dismiss_modal()
 
-        # About ten cards load per screenful, the same heuristic as get_inbox.
-        await self._session.scroll_body(pause_time=0.5, max_scrolls=max(1, limit // 10))
+        await self._load_more_cards(limit)
         await self._expand_invitation_notes()
 
         result: dict[str, Any] = {"url": url, "sections": {}}
