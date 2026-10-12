@@ -32,7 +32,7 @@ def register_network_tools(
     )
     async def get_pending_invitations(
         ctx: Context,
-        limit: Annotated[int, Field(ge=1, le=100)] = 20,
+        limit: Annotated[int, Field(ge=1, le=500)] = 20,
         kind: Literal["received", "sent"] = "received",
     ) -> dict[str, Any]:
         """
@@ -45,7 +45,7 @@ def register_network_tools(
 
         Args:
             ctx: FastMCP context for progress reporting
-            limit: Maximum number of invitations to return (1-100, default 20).
+            limit: Maximum number of invitations to return (1-500, default 20).
                 References are capped exactly; the text is trimmed at the first
                 omitted invitation.
             kind: "received" (default) for invitations to you, "sent" for your

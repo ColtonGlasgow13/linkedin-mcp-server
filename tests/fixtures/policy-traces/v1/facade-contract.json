@@ -504,8 +504,8 @@
             },
             "limit": {
               "default": 20,
-              "description": "Maximum number of invitations to return (1-100, default 20).\nReferences are capped exactly; the text is trimmed at the first\nomitted invitation.",
-              "maximum": 100,
+              "description": "Maximum number of invitations to return (1-500, default 20).\nReferences are capped exactly; the text is trimmed at the first\nomitted invitation.",
+              "maximum": 500,
               "minimum": 1,
               "type": "integer"
             }

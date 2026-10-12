@@ -708,6 +708,8 @@ def semantic_program_id(program: str) -> str:
         ("isScrollable", "scroll_main_region"),
         ('data-testid="expandable-text-button"', "invitation_notes_expand"),
         ("invitation-manager/received/ALL", "received_invitation_count"),
+        ("labels.includes(normalize(candidate.innerText))", "invitation_load_more"),
+        ("return main ? main.innerText.length : 0", "main_text_length"),
         ("jobs-search-pagination__page-state", "job_total_pages"),
         ("artdeco-pagination__pages", "saved_job_total_pages"),
         ("document.body?.innerText", "body_marker"),

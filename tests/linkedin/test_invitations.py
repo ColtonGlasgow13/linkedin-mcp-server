@@ -49,7 +49,9 @@ def page_reads():
         patch.object(PageNavigator, "_navigate_to_page", new_callable=AsyncMock) as nav,
         patch.object(PageSession, "check_rate_limit", new_callable=AsyncMock),
         patch.object(PageSession, "dismiss_modal", new_callable=AsyncMock),
-        patch.object(PageSession, "scroll_body", new_callable=AsyncMock) as scroll,
+        patch.object(
+            InvitationReader, "_load_more_cards", new_callable=AsyncMock
+        ) as load_more,
         patch.object(InvitationReader, "_wait_for_main_text", new_callable=AsyncMock),
         patch.object(
             InvitationReader, "_expand_invitation_notes", new_callable=AsyncMock
@@ -62,7 +64,7 @@ def page_reads():
         ) as zero,
         patch.object(PageContentReader, "_extract_root_content", root),
     ):
-        yield SimpleNamespace(nav=nav, scroll=scroll, zero=zero, root=root)
+        yield SimpleNamespace(nav=nav, load_more=load_more, zero=zero, root=root)
 
 
 def _serve(page_reads: SimpleNamespace, count: int) -> None:
@@ -108,12 +110,14 @@ class TestGetPendingInvitations:
 
         assert len(result["references"]["invitations"]) == 40
 
-    async def test_scrolls_one_screenful_per_ten_requested(self, mock_page, page_reads):
+    async def test_loads_more_pages_for_the_requested_limit(
+        self, mock_page, page_reads
+    ):
         _serve(page_reads, 1)
 
         await _reader(mock_page).get_pending_invitations(limit=35, kind="sent")
 
-        page_reads.scroll.assert_awaited_once_with(pause_time=0.5, max_scrolls=3)
+        page_reads.load_more.assert_awaited_once_with(35)
 
     async def test_received_zero_count_skips_recommendations(
         self, mock_page, page_reads
@@ -143,6 +147,56 @@ class TestGetPendingInvitations:
 
         assert result["sections"] == {}
         assert "references" not in result
+
+
+class TestLoadMoreCards:
+    """The manager pages with a button, ten cards a click."""
+
+    @staticmethod
+    def _run(*answers: Any) -> AsyncMock:
+        return AsyncMock(side_effect=list(answers))
+
+    async def test_clicks_until_the_limit_could_be_met(self, mock_page):
+        # 35 wanted: 10 on load, then three clicks reach 40.
+        run = self._run(100, 200, 200, 300, 300, 400)
+        with (
+            patch.object(PageSession, "run_on_linkedin", run),
+            patch.object(PageSession, "delay", new_callable=AsyncMock) as delay,
+        ):
+            loaded = await _reader(mock_page)._load_more_cards(35)
+
+        assert loaded == 3
+        assert run.await_count == 6
+        assert delay.await_count == 3
+
+    async def test_stops_when_the_button_is_gone(self, mock_page):
+        run = self._run(100, 200, None)
+        with (
+            patch.object(PageSession, "run_on_linkedin", run),
+            patch.object(PageSession, "delay", new_callable=AsyncMock),
+        ):
+            loaded = await _reader(mock_page)._load_more_cards(500)
+
+        assert loaded == 1
+        assert run.await_count == 3
+
+    async def test_stops_when_a_click_loads_nothing(self, mock_page):
+        run = self._run(100, 100)
+        with (
+            patch.object(PageSession, "run_on_linkedin", run),
+            patch.object(PageSession, "delay", new_callable=AsyncMock),
+        ):
+            loaded = await _reader(mock_page)._load_more_cards(500)
+
+        assert loaded == 0
+        assert run.await_count == 2
+
+    async def test_a_single_page_limit_never_clicks(self, mock_page):
+        run = self._run()
+        with patch.object(PageSession, "run_on_linkedin", run):
+            assert await _reader(mock_page)._load_more_cards(10) == 0
+
+        run.assert_not_awaited()
 
 
 class TestTrimInvitationText:
