@@ -45,6 +45,7 @@ instances, clear profiles, or replace the user's browser session.
   `get_job_apply_url`.
 - Content: `get_feed` and `search_posts`.
 - Messages: `get_inbox`, `get_conversation`, and `search_conversations`.
+- Invitations: `get_pending_invitations` (received or sent).
 - Writes: `send_message` and `connect_with_person`, subject to the explicit
   authorization rules above.
 - Cleanup: use `close_session` only when the user asks to end the managed

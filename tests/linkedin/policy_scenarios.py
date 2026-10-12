@@ -1025,6 +1025,34 @@ async def _conversation_scenario(method: str) -> dict[str, Any]:
     )
 
 
+async def _pending_invitations_scenario() -> dict[str, Any]:
+    name = "get_pending_invitations__sent_limit"
+    recorder = TraceRecorder(name, _COMMON_ALLOWED)
+    clock = FakeClock(recorder)
+    page = _page(recorder)
+    page.script("evaluate:invitation_notes_expand", 1, 0)
+    page.script(
+        "evaluate:root_content",
+        _root(
+            "Ada Lovelace\nSent 3 weeks ago\n\nBob Stall\nSent 1 week ago",
+            [
+                {"href": "https://www.linkedin.com/in/ada/", "text": "Ada Lovelace"},
+                {"href": "https://www.linkedin.com/in/bob/", "text": "Bob Stall"},
+            ],
+        ),
+    )
+    extractor = _extractor(page)
+    arguments = {"limit": 1, "kind": "sent"}
+    async with boundaries(recorder, clock):
+        with recorder.context("get_pending_invitations", "invitations"):
+            result = await extractor.get_pending_invitations(**arguments)
+    page.assert_clean()
+    return recorder.trace(
+        {"method": "get_pending_invitations", "arguments": arguments},
+        _complete_mapping_result(result, section_names=list(result["sections"])),
+    )
+
+
 ROW_CLICK_STOPPED_OUTCOME = {
     "rows": [
         {"ariaLabel": "Select conversation with Ada Lovelace", "threadId": "2-ada"}
@@ -1102,6 +1130,7 @@ TOOL_FACADE_METHODS = {
     "get_inbox",
     "get_job_apply_url",
     "get_my_profile",
+    "get_pending_invitations",
     "get_saved_jobs",
     "get_sidebar_profiles",
     "read_company",
@@ -1198,6 +1227,7 @@ async def build_policy_traces() -> dict[str, dict[str, Any]]:
         "conversation-row-resolution.json": (
             await _conversation_row_resolution_scenario()
         ),
+        "pending-invitations.json": await _pending_invitations_scenario(),
     }
     return traces
 
