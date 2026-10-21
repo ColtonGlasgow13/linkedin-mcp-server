@@ -10,7 +10,11 @@ import re
 from patchright.async_api import TimeoutError as PlaywrightTimeoutError
 
 from linkedin_mcp_server.linkedin.content import PageContentReader
-from linkedin_mcp_server.linkedin.link_metadata import Reference, build_references
+from linkedin_mcp_server.linkedin.link_metadata import (
+    RawReference,
+    Reference,
+    build_references,
+)
 from linkedin_mcp_server.linkedin.navigation import PageNavigator
 from linkedin_mcp_server.linkedin.session import PageSession
 from linkedin_mcp_server.linkedin.text import strip_linkedin_noise
@@ -78,6 +82,30 @@ _RECEIVED_COUNT_IS_ZERO_JS = r"""() => {
     const text = currentAll.innerText || currentAll.textContent || '';
     const match = text.match(/\((\d+)\)/);
     return match ? Number(match[1]) === 0 : false;
+}"""
+
+
+# Each card's profile link wraps only the photo, so it has no text, aria-label
+# or title and the generic reference builder drops it (measured live on the sent
+# page 2026-10-21: 84 cards, 84 photo-only /in/ anchors, zero references). The
+# card is the anchor's closest role="listitem" and its first rendered line is
+# the person's name; both are structural, so no locale text is read. Anchors
+# that already carry text are left to the generic builder.
+_CARD_NAMES_JS = """() => {
+    const main = document.querySelector('main');
+    if (!main) return {};
+    const names = {};
+    for (const anchor of main.querySelectorAll('a[href*="/in/"]')) {
+        if ((anchor.innerText || '').trim()) continue;
+        const card = anchor.closest('[role="listitem"]');
+        if (!card) continue;
+        const name = (card.innerText || '')
+            .split('\\n')
+            .map(line => line.trim())
+            .find(Boolean);
+        if (name && !(anchor.href in names)) names[anchor.href] = name;
+    }
+    return names;
 }"""
 
 
@@ -210,6 +238,15 @@ class InvitationReader:
             logger.debug("Failed to read received invitation count: %s", exc)
             return False
 
+    async def _card_names(self) -> dict[str, str]:
+        """Map each textless profile link to its card's name."""
+        try:
+            names = await self._session.run_on_linkedin(_CARD_NAMES_JS)
+        except Exception as exc:
+            logger.debug("Failed to read invitation card names: %s", exc)
+            return {}
+        return names if isinstance(names, dict) else {}
+
     async def _load_more_cards(self, limit: int) -> int:
         """Click "Load more" until ``limit`` cards could be on the page.
 
@@ -257,7 +294,14 @@ class InvitationReader:
         if not cleaned:
             return result
 
-        all_references = build_references(raw_result["references"], _SECTION)
+        names = await self._card_names()
+        raw_references: list[RawReference] = []
+        for raw in raw_result["references"]:
+            name = names.get(raw.get("href", ""))
+            if name and not raw.get("text"):
+                raw = RawReference(**{**raw, "text": name})
+            raw_references.append(raw)
+        all_references = build_references(raw_references, _SECTION)
         result["sections"][_SECTION] = trim_invitation_text(
             cleaned, all_references, limit
         )

@@ -1,0 +1,104 @@
+{
+  "captured": "2026-10-21 sent invitation manager, trimmed to 3 cards and anonymized",
+  "root": {
+    "source": "root",
+    "text": "Manage invitations\n\nReceived\nSent\nPeople (3)\n\nAlex Doe\n\nFounding Engineer @ Example AI\n\nSent 1 hour ago\n\nWithdraw\n\nSam Roe\n\nEngineering Lead\n\nSent yesterday\n\nWithdraw\n\nKim Poe\n\nTechnical Recruiter\n\nSent 2 weeks ago\n\nWithdraw",
+    "references": [
+      {
+        "href": "https://www.linkedin.com/mynetwork/invitation-manager/received",
+        "text": "Received",
+        "aria_label": "",
+        "title": "",
+        "heading": "",
+        "in_article": false,
+        "in_nav": true,
+        "in_footer": false
+      },
+      {
+        "href": "https://www.linkedin.com/mynetwork/invitation-manager/sent",
+        "text": "Sent",
+        "aria_label": "",
+        "title": "",
+        "heading": "",
+        "in_article": false,
+        "in_nav": true,
+        "in_footer": false
+      },
+      {
+        "href": "https://www.linkedin.com/mynetwork/invitation-manager/sent/CONNECTION/",
+        "text": "People (3)",
+        "aria_label": "",
+        "title": "",
+        "heading": "",
+        "in_article": false,
+        "in_nav": true,
+        "in_footer": false
+      },
+      {
+        "href": "https://www.linkedin.com/in/alex-doe-1a2b3c/",
+        "text": "",
+        "aria_label": "",
+        "title": "",
+        "heading": "",
+        "in_article": false,
+        "in_nav": false,
+        "in_footer": false
+      },
+      {
+        "href": "https://www.linkedin.com/",
+        "text": "Withdraw",
+        "aria_label": "Withdraw invitation sent to Alex Doe",
+        "title": "",
+        "heading": "",
+        "in_article": false,
+        "in_nav": false,
+        "in_footer": false
+      },
+      {
+        "href": "https://www.linkedin.com/in/samroe/",
+        "text": "",
+        "aria_label": "",
+        "title": "",
+        "heading": "",
+        "in_article": false,
+        "in_nav": false,
+        "in_footer": false
+      },
+      {
+        "href": "https://www.linkedin.com/",
+        "text": "Withdraw",
+        "aria_label": "Withdraw invitation sent to Sam Roe",
+        "title": "",
+        "heading": "",
+        "in_article": false,
+        "in_nav": false,
+        "in_footer": false
+      },
+      {
+        "href": "https://www.linkedin.com/in/kim-poe/",
+        "text": "",
+        "aria_label": "",
+        "title": "",
+        "heading": "",
+        "in_article": false,
+        "in_nav": false,
+        "in_footer": false
+      },
+      {
+        "href": "https://www.linkedin.com/",
+        "text": "Withdraw",
+        "aria_label": "Withdraw invitation sent to Kim Poe",
+        "title": "",
+        "heading": "",
+        "in_article": false,
+        "in_nav": false,
+        "in_footer": false
+      }
+    ]
+  },
+  "card_names": {
+    "https://www.linkedin.com/in/alex-doe-1a2b3c/": "Alex Doe",
+    "https://www.linkedin.com/in/samroe/": "Sam Roe",
+    "https://www.linkedin.com/in/kim-poe/": "Kim Poe"
+  }
+}
