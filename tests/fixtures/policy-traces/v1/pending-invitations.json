@@ -148,6 +148,13 @@
       "operation": "root_content",
       "program_digest": "e6b2be4ebddd",
       "section": "invitations"
+    },
+    {
+      "call": "get_pending_invitations",
+      "kind": "evaluate",
+      "operation": "invitation_card_names",
+      "program_digest": "174f43351762",
+      "section": "invitations"
     }
   ],
   "result": {

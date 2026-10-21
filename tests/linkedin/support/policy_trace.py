@@ -710,6 +710,7 @@ def semantic_program_id(program: str) -> str:
         ("invitation-manager/received/ALL", "received_invitation_count"),
         ("labels.includes(normalize(candidate.innerText))", "invitation_load_more"),
         ("return main ? main.innerText.length : 0", "main_text_length"),
+        ("anchor.closest('[role=\"listitem\"]')", "invitation_card_names"),
         ("jobs-search-pagination__page-state", "job_total_pages"),
         ("artdeco-pagination__pages", "saved_job_total_pages"),
         ("document.body?.innerText", "body_marker"),

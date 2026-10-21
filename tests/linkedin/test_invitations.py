@@ -7,6 +7,8 @@ program text; everything else is checked through what the reader returns.
 
 from __future__ import annotations
 
+import json
+from pathlib import Path
 from types import SimpleNamespace
 from typing import Any
 from unittest.mock import AsyncMock, patch
@@ -62,9 +64,14 @@ def page_reads():
             new_callable=AsyncMock,
             return_value=False,
         ) as zero,
+        patch.object(
+            InvitationReader, "_card_names", new_callable=AsyncMock, return_value={}
+        ) as card_names,
         patch.object(PageContentReader, "_extract_root_content", root),
     ):
-        yield SimpleNamespace(nav=nav, load_more=load_more, zero=zero, root=root)
+        yield SimpleNamespace(
+            nav=nav, load_more=load_more, zero=zero, root=root, card_names=card_names
+        )
 
 
 def _serve(page_reads: SimpleNamespace, count: int) -> None:
@@ -141,6 +148,44 @@ class TestGetPendingInvitations:
 
         assert "invitations" in result["sections"]
         page_reads.zero.assert_not_awaited()
+
+    async def test_photo_only_profile_links_take_the_card_name(
+        self, mock_page, page_reads
+    ):
+        # Live sent page, 2026-10-21: every card's /in/ link wraps only the
+        # photo, so without the card name no reference survived at all.
+        fixture = json.loads(
+            (
+                Path(__file__).parents[1]
+                / "fixtures"
+                / "linkedin"
+                / "invitations_sent_photo_only_anchors.json"
+            ).read_text()
+        )
+        page_reads.root.return_value = fixture["root"]
+        page_reads.card_names.return_value = fixture["card_names"]
+
+        result = await _reader(mock_page).get_pending_invitations(limit=2, kind="sent")
+
+        assert [
+            (ref["url"], ref["text"]) for ref in result["references"]["invitations"]
+        ] == [("/in/alex-doe-1a2b3c/", "Alex Doe"), ("/in/samroe/", "Sam Roe")]
+        assert "Kim Poe" not in result["sections"]["invitations"]
+
+    async def test_photo_only_links_without_a_card_name_are_dropped(
+        self, mock_page, page_reads
+    ):
+        page_reads.root.return_value = {
+            "source": "root",
+            "text": "Someone\nSent today",
+            "references": [
+                {"href": "https://www.linkedin.com/in/someone/", "text": ""}
+            ],
+        }
+
+        result = await _reader(mock_page).get_pending_invitations(kind="sent")
+
+        assert "references" not in result
 
     async def test_an_empty_page_returns_no_section(self, mock_page, page_reads):
         result = await _reader(mock_page).get_pending_invitations(kind="sent")
@@ -225,6 +270,13 @@ class TestTrimInvitationText:
         text = "Ada\nhi\n\nBob\nhey"
 
         assert trim_invitation_text(text, self._refs("Ada", "Bob"), 5) == text
+
+
+class TestCardNamesProgram:
+    def test_card_names_are_read_structurally(self):
+        script = invitations._CARD_NAMES_JS
+        assert '[role="listitem"]' in script
+        assert 'a[href*="/in/"]' in script
 
 
 class TestNoteExpansionProgram:
