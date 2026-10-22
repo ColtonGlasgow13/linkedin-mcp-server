@@ -472,8 +472,9 @@ class PersonReader:
         location: str | None = None,
         network: list[str] | None = None,
         current_company: str | None = None,
+        page: int = 1,
     ) -> dict[str, Any]:
-        """Search for people and extract the results page.
+        """Search for people and extract one results page.
 
         Args:
             keywords: Free-text query ("software engineer", "recruiter at Google").
@@ -491,6 +492,8 @@ class PersonReader:
                 unfiltered result set. Look up a company's URN via
                 ``get_company_profile`` -- it is exposed under
                 ``references["about"]``.
+            page: 1-based results page. LinkedIn shows about 10 people per
+                page; each call loads exactly one page.
 
         Returns:
             {url, sections: {name: text}}
@@ -502,6 +505,7 @@ class PersonReader:
             location=location,
             network=network,
             current_company=current_company,
+            page=page,
         )
         extracted = await self._capture.capture(
             url,

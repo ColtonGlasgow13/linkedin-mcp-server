@@ -124,6 +124,7 @@ def build_people_search_url(
     location: str | None = None,
     network: list[str] | None = None,
     current_company: str | None = None,
+    page: int = 1,
 ) -> str:
     """Build a LinkedIn people search URL, refusing filters LinkedIn ignores.
 
@@ -149,6 +150,9 @@ def build_people_search_url(
             f'URN via get_company_profile -> references["about"].'
         )
 
+    if page < 1:
+        raise FilterValidationError(f"page must be 1 or greater; got {page!r}")
+
     params = f"keywords={quote_plus(keywords)}"
     if location:
         params += f"&location={quote_plus(location)}"
@@ -156,6 +160,10 @@ def build_people_search_url(
         params += f"&network={_encode_list_facet(network)}"
     if current_company:
         params += f"&currentCompany={_encode_list_facet([current_company])}"
+    # Page 1 is LinkedIn's default, so it stays off the URL and the
+    # first-page URL is unchanged for callers that never page.
+    if page > 1:
+        params += f"&page={page}"
 
     return f"https://www.linkedin.com/search/results/people/?{params}"
 

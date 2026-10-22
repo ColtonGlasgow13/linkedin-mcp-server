@@ -832,6 +832,13 @@
           ],
           "default": null,
           "description": "Optional connection-degree filter. Each element is one of\n\"F\" (1st-degree), \"S\" (2nd-degree), \"O\" (3rd-degree and beyond).\nExample: [\"F\"] to only return 1st-degree connections. A single\ntoken (\"F\") or a comma-separated string (\"F,S\") is also\naccepted, for clients that cannot transmit an array."
+        },
+        "page": {
+          "default": 1,
+          "description": "Results page to load, 1-100 (default 1). LinkedIn shows\nabout 10 people per page and each call loads exactly one page,\nso repeat the same query with page=2, 3, ... to go deeper.",
+          "maximum": 100,
+          "minimum": 1,
+          "type": "integer"
         }
       },
       "required": [
