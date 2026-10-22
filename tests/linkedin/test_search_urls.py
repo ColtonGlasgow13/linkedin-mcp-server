@@ -143,6 +143,24 @@ class TestBuildJobSearchUrl:
     def test_keywords_are_percent_encoded(self, keywords: str, encoded: str):
         assert build_job_search_url(keywords) == f"{JOBS}keywords={encoded}"
 
+    def test_page_one_stays_off_the_url(self):
+        assert build_people_search_url("engineer", page=1) == (
+            f"{PEOPLE}keywords=engineer"
+        )
+
+    def test_later_page_is_appended_last(self):
+        assert build_people_search_url(
+            "engineer", network=["S"], current_company="1115", page=4
+        ) == (
+            f"{PEOPLE}keywords=engineer&network=%5B%22S%22%5D"
+            "&currentCompany=%5B%221115%22%5D&page=4"
+        )
+
+    @pytest.mark.parametrize("page", [0, -1])
+    def test_page_below_one_is_refused(self, page: int):
+        with pytest.raises(FilterValidationError, match="page must be 1"):
+            build_people_search_url("engineer", page=page)
+
     def test_empty_keywords_still_produce_the_parameter(self):
         assert build_job_search_url("") == f"{JOBS}keywords="
 
