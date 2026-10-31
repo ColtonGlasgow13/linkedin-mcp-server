@@ -249,6 +249,7 @@ _A_VALID_CALL = [
     ),
     ("feed", "get_feed", {}),
     ("post", "search_posts", {"keywords": "python"}),
+    ("network", "get_pending_invitations", {"kind": "sent"}),
 ]
 
 
