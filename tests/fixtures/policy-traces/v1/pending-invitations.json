@@ -1,0 +1,187 @@
+{
+  "call": {
+    "arguments": {
+      "kind": "sent",
+      "limit": 25
+    },
+    "method": "get_pending_invitations"
+  },
+  "events": [
+    {
+      "call": "get_pending_invitations",
+      "callback_id": "callback-1",
+      "event": "framenavigated",
+      "kind": "listener.add",
+      "section": "invitations"
+    },
+    {
+      "call": "get_pending_invitations",
+      "extra": {
+        "target_url": "https://www.linkedin.com/mynetwork/invitation-manager/sent/",
+        "wait_until": "domcontentloaded"
+      },
+      "kind": "boundary.trace",
+      "label": "extractor-before-goto",
+      "section": "invitations"
+    },
+    {
+      "call": "get_pending_invitations",
+      "kind": "navigate",
+      "landed_url": "https://www.linkedin.com/mynetwork/invitation-manager/sent/",
+      "requested_url": "https://www.linkedin.com/mynetwork/invitation-manager/sent/",
+      "section": "invitations",
+      "timeout_ms": 30000,
+      "wait_until": "domcontentloaded"
+    },
+    {
+      "call": "get_pending_invitations",
+      "description": "goto https://www.linkedin.com/mynetwork/invitation-manager/sent/",
+      "kind": "boundary.stabilize",
+      "result": null,
+      "section": "invitations"
+    },
+    {
+      "call": "get_pending_invitations",
+      "extra": {
+        "target_url": "https://www.linkedin.com/mynetwork/invitation-manager/sent/",
+        "wait_until": "domcontentloaded"
+      },
+      "kind": "boundary.trace",
+      "label": "extractor-after-goto",
+      "section": "invitations"
+    },
+    {
+      "call": "get_pending_invitations",
+      "kind": "boundary.auth_quick",
+      "result": null,
+      "section": "invitations"
+    },
+    {
+      "call": "get_pending_invitations",
+      "callback_id": "callback-1",
+      "event": "framenavigated",
+      "kind": "listener.remove",
+      "section": "invitations"
+    },
+    {
+      "call": "get_pending_invitations",
+      "kind": "boundary.rate_limit",
+      "section": "invitations"
+    },
+    {
+      "arg": null,
+      "call": "get_pending_invitations",
+      "kind": "wait_for_function",
+      "operation": "main_text_100",
+      "program_digest": "246c5e96e441",
+      "section": "invitations",
+      "timeout_ms": 10000
+    },
+    {
+      "call": "get_pending_invitations",
+      "dismissed": false,
+      "kind": "boundary.modal",
+      "section": "invitations"
+    },
+    {
+      "arg": {
+        "labels": [
+          "Load more",
+          "Show more"
+        ]
+      },
+      "call": "get_pending_invitations",
+      "kind": "evaluate",
+      "operation": "invitation_load_more",
+      "program_digest": "a2a7297120d8",
+      "section": "invitations"
+    },
+    {
+      "call": "get_pending_invitations",
+      "kind": "sleep",
+      "reason": "sleep",
+      "seconds": 1.5,
+      "section": "invitations"
+    },
+    {
+      "call": "get_pending_invitations",
+      "kind": "evaluate",
+      "operation": "main_text_length",
+      "program_digest": "39cb2c9e45fb",
+      "section": "invitations"
+    },
+    {
+      "arg": {
+        "labels": [
+          "Load more",
+          "Show more"
+        ]
+      },
+      "call": "get_pending_invitations",
+      "kind": "evaluate",
+      "operation": "invitation_load_more",
+      "program_digest": "a2a7297120d8",
+      "section": "invitations"
+    },
+    {
+      "call": "get_pending_invitations",
+      "kind": "evaluate",
+      "operation": "invitation_notes_expand",
+      "program_digest": "c8175f78a8d9",
+      "section": "invitations"
+    },
+    {
+      "call": "get_pending_invitations",
+      "kind": "evaluate",
+      "operation": "invitation_notes_expand",
+      "program_digest": "c8175f78a8d9",
+      "section": "invitations"
+    },
+    {
+      "arg": {
+        "selectors": [
+          "main"
+        ]
+      },
+      "call": "get_pending_invitations",
+      "kind": "evaluate",
+      "operation": "root_content",
+      "program_digest": "e6b2be4ebddd",
+      "section": "invitations"
+    },
+    {
+      "call": "get_pending_invitations",
+      "kind": "evaluate",
+      "operation": "invitation_card_names",
+      "program_digest": "174f43351762",
+      "section": "invitations"
+    }
+  ],
+  "result": {
+    "references": {
+      "invitations": [
+        {
+          "context": "invitation",
+          "kind": "person",
+          "text": "Ada Lovelace",
+          "url": "/in/ada/"
+        },
+        {
+          "context": "invitation",
+          "kind": "person",
+          "text": "Bob Stall",
+          "url": "/in/bob/"
+        }
+      ]
+    },
+    "section_names": [
+      "invitations"
+    ],
+    "sections": {
+      "invitations": "Ada Lovelace\nSent 3 weeks ago\n\nBob Stall\nSent 1 week ago"
+    },
+    "url": "https://www.linkedin.com/mynetwork/invitation-manager/sent/"
+  },
+  "scenario": "get_pending_invitations__sent_limit",
+  "schema_version": 1
+}

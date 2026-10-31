@@ -44,6 +44,7 @@ def _make_mock_extractor(result: dict) -> MagicMock:
     mock.search_conversations = AsyncMock(return_value=result)
     mock.archive_conversation = AsyncMock(return_value=result)
     mock.send_message = AsyncMock(return_value=result)
+    mock.get_pending_invitations = AsyncMock(return_value=result)
     mock.get_my_profile = AsyncMock(return_value=result)
     mock.search_companies = AsyncMock(return_value=result)
     mock.search_posts = AsyncMock(return_value=result)
@@ -55,7 +56,7 @@ def _make_mock_extractor(result: dict) -> MagicMock:
     return mock
 
 
-_TOOL_MODULES = ("person", "company", "job", "messaging", "feed", "post")
+_TOOL_MODULES = ("person", "company", "job", "messaging", "network", "feed", "post")
 
 
 @pytest.fixture
@@ -260,6 +261,7 @@ _A_VALID_CALL = [
     ),
     ("feed", "get_feed", {}),
     ("post", "search_posts", {"keywords": "python"}),
+    ("network", "get_pending_invitations", {"kind": "sent"}),
 ]
 
 
@@ -2741,6 +2743,70 @@ class TestPostTools:
             await mcp.call_tool("search_posts", {"keywords": "python", "max_pages": 0})
 
 
+class TestNetworkTools:
+    async def test_get_pending_invitations_defaults_to_received(
+        self, mock_context, serve_extractor
+    ):
+        expected = {
+            "url": "https://www.linkedin.com/mynetwork/invitation-manager/received/",
+            "sections": {"invitations": "Alice Smith\nBob Jones"},
+        }
+        mock_extractor = _make_mock_extractor(expected)
+
+        from linkedin_mcp_server.tools.network import register_network_tools
+
+        mcp = FastMCP("test")
+        register_network_tools(mcp)
+
+        serve_extractor(mock_extractor)
+        tool_fn = await get_tool_fn(mcp, "get_pending_invitations")
+        result = await tool_fn(mock_context)
+
+        assert result == expected
+        mock_extractor.get_pending_invitations.assert_awaited_once_with(
+            limit=20, kind="received"
+        )
+
+    async def test_get_pending_invitations_passes_sent_and_limit(
+        self, mock_context, serve_extractor
+    ):
+        mock_extractor = _make_mock_extractor({"url": "u", "sections": {}})
+
+        from linkedin_mcp_server.tools.network import register_network_tools
+
+        mcp = FastMCP("test")
+        register_network_tools(mcp)
+
+        serve_extractor(mock_extractor)
+        await mcp.call_tool("get_pending_invitations", {"limit": 500, "kind": "sent"})
+
+        mock_extractor.get_pending_invitations.assert_awaited_once_with(
+            limit=500, kind="sent"
+        )
+
+    @pytest.mark.parametrize(
+        ("arguments", "field"),
+        [
+            ({"kind": "archived"}, "kind"),
+            ({"limit": 501}, "limit"),
+            ({"limit": 0}, "limit"),
+        ],
+    )
+    async def test_get_pending_invitations_rejects_bad_arguments(
+        self, arguments, field
+    ):
+        # FastMCP wraps the pydantic error in its own ValidationError.
+        from fastmcp.exceptions import ValidationError
+
+        from linkedin_mcp_server.tools.network import register_network_tools
+
+        mcp = FastMCP("test")
+        register_network_tools(mcp)
+
+        with pytest.raises(ValidationError, match=field):
+            await mcp.call_tool("get_pending_invitations", arguments)
+
+
 class TestToolTimeouts:
     async def test_all_tools_have_global_timeout(self):
         from linkedin_mcp_server.server import create_mcp_server
@@ -2764,6 +2830,7 @@ class TestToolTimeouts:
             "search_conversations",
             "archive_conversation",
             "send_message",
+            "get_pending_invitations",
             "get_feed",
             "search_posts",
             "close_session",
@@ -2799,6 +2866,7 @@ class TestToolTimeouts:
             "search_conversations",
             "archive_conversation",
             "send_message",
+            "get_pending_invitations",
             "get_feed",
             "search_posts",
             "close_session",
