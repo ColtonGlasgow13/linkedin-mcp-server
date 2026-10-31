@@ -749,7 +749,10 @@ class TestWithdrawInvitation:
     before it asserts that it was never clicked.
     """
 
-    def _patches(self, actions, signals, *, click=True, dialog=True, confirm=True):
+    def _patches(
+        self, actions, signals, *, click=True, dialog=True, confirm="confirmed"
+    ):
+        actions._mark_open_dialogs = AsyncMock()
         return (
             patch.object(
                 actions,
@@ -764,11 +767,14 @@ class TestWithdrawInvitation:
                 return_value=click,
             ),
             patch.object(
-                actions, "_dialog_is_open", new_callable=AsyncMock, return_value=dialog
+                actions,
+                "_withdraw_dialog_is_open",
+                new_callable=AsyncMock,
+                return_value=dialog,
             ),
             patch.object(
                 actions,
-                "_click_dialog_primary_button",
+                "_confirm_withdraw_dialog",
                 new_callable=AsyncMock,
                 return_value=confirm,
             ),
@@ -871,7 +877,7 @@ class TestWithdrawInvitation:
 
     async def test_a_failed_confirm_click_closes_the_dialog(self, mock_page):
         actions = _actions(mock_page, _reads(PENDING_TEXT))
-        p = self._patches(actions, [_PENDING], confirm=False)
+        p = self._patches(actions, [_PENDING], confirm="no_button")
         with p[0], p[1], p[2], p[3], p[4] as dismiss, p[5]:
             result = await actions.withdraw_invitation(
                 "testuser", confirm_withdraw=True
@@ -879,7 +885,29 @@ class TestWithdrawInvitation:
 
         assert result["status"] == "withdraw_failed"
         assert result["withdrawn"] is False
+        assert "Could not confirm" in result["message"]
         dismiss.assert_awaited_once()
+
+    async def test_a_dialog_that_stays_open_is_a_failure_without_a_reread(
+        self, mock_page
+    ):
+        read = _reads(PENDING_TEXT)
+        actions = _actions(mock_page, read)
+        p = self._patches(actions, [_PENDING], confirm="stayed_open")
+        with p[0] as signals, p[1], p[2], p[3], p[4] as dismiss, p[5]:
+            result = await actions.withdraw_invitation(
+                "testuser", confirm_withdraw=True
+            )
+
+        assert result["status"] == "withdraw_failed"
+        assert result["withdrawn"] is False
+        assert "dialog stayed open" in result["message"]
+        dismiss.assert_awaited_once()
+        read.assert_awaited_once()
+        assert signals.await_count == 1
+        mark = actions._mark_open_dialogs
+        assert isinstance(mark, AsyncMock)
+        mark.assert_awaited_once()
 
     async def test_withdrawn_on_settle_retry(self, mock_page):
         actions = _actions(
