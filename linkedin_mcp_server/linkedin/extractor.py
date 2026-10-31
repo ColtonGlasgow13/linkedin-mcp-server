@@ -270,6 +270,17 @@ class LinkedInExtractor:
         """List pending network invitations, received or sent."""
         return await self._invitations.get_pending_invitations(limit, kind)
 
+    async def withdraw_invitation(
+        self,
+        username: str,
+        *,
+        confirm_withdraw: bool = False,
+    ) -> dict[str, Any]:
+        """Withdraw the pending invitation sent to one member."""
+        return await self._connection.withdraw_invitation(
+            username, confirm_withdraw=confirm_withdraw
+        )
+
     async def send_message(
         self,
         linkedin_username: str,
