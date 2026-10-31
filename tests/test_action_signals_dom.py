@@ -47,6 +47,7 @@ from linkedin_mcp_server.linkedin.connection import (
 from linkedin_mcp_server.linkedin.connection_actions import (
     ACTION_SIGNALS_JS,
     CLICK_INCOMING_ACCEPT_JS,
+    CLICK_PENDING_WITHDRAW_JS,
     OPEN_MORE_BUTTON_JS,
     ConnectionActions,
 )
@@ -310,6 +311,8 @@ def pending_top_card(labels: Labels) -> str:
     <a href="/messaging/compose/?profileUrn=urn%3Ali%3Afsd_profile%3ADDD"
       >{labels.message}</a>
     <a href="https://www.linkedin.com/in/florian/"
+      onclick="event.preventDefault();
+        document.body.setAttribute('data-clicked','pending-control')"
       aria-label="{labels.pending}">{labels.pending}</a>
     <button type="button" aria-expanded="false">{labels.more}</button>
   </div>
@@ -591,6 +594,27 @@ class TestActionChoiceIsStructural:
             lambda page, html: _click(page, html, OPEN_MORE_BUTTON_JS),
         )
 
+    async def test_withdraw_clicks_the_labeled_anchor_only(self, dom_page):
+        # The Pending control is the action root's one labeled anchor; the
+        # Message anchor beside it carries no aria-label and More is a button.
+        await _in_every_locale(
+            dom_page,
+            _both(pending_top_card, sidebar_section),
+            (True, "pending-control"),
+            lambda page, html: _click(page, html, CLICK_PENDING_WITHDRAW_JS),
+        )
+
+    @pytest.mark.parametrize("card", [connected_top_card, connectable_top_card])
+    async def test_withdraw_clicks_nothing_without_a_pending_control(
+        self, dom_page, card
+    ):
+        await _in_every_locale(
+            dom_page,
+            _both(card, sidebar_section),
+            (False, None),
+            lambda page, html: _click(page, html, CLICK_PENDING_WITHDRAW_JS),
+        )
+
     async def test_no_more_opener_outside_an_action_root(self, dom_page):
         # No compose anchor means no action root, so there is no More button
         # to find even though the page renders one.
@@ -653,4 +677,74 @@ class TestAClickOnlyLandsOnLinkedIn:
         assert (
             await dom_page.evaluate("document.body.getAttribute('data-clicked')")
             == "first-labeled"
+        )
+
+
+# The withdraw confirmation dialog the Pending click opens, rendered as a
+# body-level portal the way LinkedIn does: dismiss in the header, then Cancel
+# and the primary button in the footer. ``closes`` decides whether the
+# primary button's click removes the dialog.
+def _withdraw_dialog(*, closes: bool = True) -> str:
+    close = "this.closest('[role=dialog]').remove();" if closes else ""
+    return (
+        '<div role="dialog"><button aria-label="d">x</button><p>t</p>'
+        "<button onclick=\"document.body.setAttribute('data-clicked','cancel');"
+        "this.closest('[role=dialog]').remove()\">c</button>"
+        "<button onclick=\"document.body.setAttribute('data-clicked','withdraw');"
+        f'{close}">w</button></div>'
+    )
+
+
+# A dialog that is already open and visible before the Pending click, later in
+# the document than the withdraw dialog, so a page-wide "last dialog button"
+# pick lands on its button instead.
+_OTHER_DIALOG = (
+    '<div role="dialog"><button>a</button>'
+    "<button onclick=\"document.body.setAttribute('data-clicked','other')\">"
+    "b</button></div>"
+)
+
+
+async def _open_withdraw_dialog(page, html: str) -> None:
+    await page.evaluate(
+        "(html) => document.body.insertAdjacentHTML('afterbegin', html)", html
+    )
+
+
+class TestWithdrawDialogScope:
+    async def test_confirms_only_the_newly_opened_dialog(self, dom_page):
+        await dom_page.set_content(_page_html(pending_top_card(ENGLISH), _OTHER_DIALOG))
+        actions = _actions(dom_page)
+        await actions._mark_open_dialogs()
+        assert await actions._withdraw_dialog_is_open(timeout=0.3) is False
+
+        await _open_withdraw_dialog(dom_page, _withdraw_dialog())
+        assert await actions._withdraw_dialog_is_open(timeout=1) is True
+        assert await actions._confirm_withdraw_dialog(timeout=2) == "confirmed"
+        assert (
+            await dom_page.evaluate("document.body.getAttribute('data-clicked')")
+            == "withdraw"
+        )
+
+    async def test_a_dialog_that_stays_open_is_not_confirmed(self, dom_page):
+        await dom_page.set_content(_page_html(pending_top_card(ENGLISH), _OTHER_DIALOG))
+        actions = _actions(dom_page)
+        await actions._mark_open_dialogs()
+        await _open_withdraw_dialog(dom_page, _withdraw_dialog(closes=False))
+
+        assert await actions._confirm_withdraw_dialog(timeout=1) == "stayed_open"
+        assert (
+            await dom_page.evaluate("document.body.getAttribute('data-clicked')")
+            == "withdraw"
+        )
+
+    async def test_nothing_is_clicked_without_a_new_dialog(self, dom_page):
+        await dom_page.set_content(_page_html(pending_top_card(ENGLISH), _OTHER_DIALOG))
+        actions = _actions(dom_page)
+        await actions._mark_open_dialogs()
+
+        assert await actions._confirm_withdraw_dialog(timeout=0.5) == "no_button"
+        assert (
+            await dom_page.evaluate("document.body.getAttribute('data-clicked')")
+            is None
         )

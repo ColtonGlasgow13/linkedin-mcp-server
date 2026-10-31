@@ -735,6 +735,218 @@ class TestConnectWithPerson:
         read.assert_awaited_once_with("williamhgates")
 
 
+PENDING_TEXT = "Frank\n\n· 3rd\n\nFounder\n\nMessage\nPending\nMore\n"
+WITHDRAWN_TEXT = "Frank\n\n· 3rd\n\nFounder\n\nConnect\nMessage\nMore\n"
+_PENDING = {"compose": True, "labeled_anchor": True}
+_CONNECTABLE = {"invite": True, "compose": True}
+
+
+class TestWithdrawInvitation:
+    """The withdraw gate: only a pending profile, only with confirm_withdraw.
+
+    Every case drives the real classifier from structural signals. The
+    dialog's primary button is the one irreversible step, so each failure
+    before it asserts that it was never clicked.
+    """
+
+    def _patches(
+        self, actions, signals, *, click=True, dialog=True, confirm="confirmed"
+    ):
+        actions._mark_open_dialogs = AsyncMock()
+        return (
+            patch.object(
+                actions,
+                "_read_action_signals",
+                new_callable=AsyncMock,
+                side_effect=[_signals(**kw) for kw in signals],
+            ),
+            patch.object(
+                actions,
+                "_click_pending_withdraw",
+                new_callable=AsyncMock,
+                return_value=click,
+            ),
+            patch.object(
+                actions,
+                "_withdraw_dialog_is_open",
+                new_callable=AsyncMock,
+                return_value=dialog,
+            ),
+            patch.object(
+                actions,
+                "_confirm_withdraw_dialog",
+                new_callable=AsyncMock,
+                return_value=confirm,
+            ),
+            patch.object(actions, "_dismiss_dialog", new_callable=AsyncMock),
+            patch(
+                "linkedin_mcp_server.linkedin.connection_actions.asyncio.sleep",
+                new_callable=AsyncMock,
+            ),
+        )
+
+    async def test_withdraws_and_verifies(self, mock_page):
+        actions = _actions(mock_page, _reads(PENDING_TEXT, WITHDRAWN_TEXT))
+        p = self._patches(actions, [_PENDING, _CONNECTABLE])
+        with p[0], p[1] as click, p[2], p[3] as primary, p[4], p[5] as sleep:
+            result = await actions.withdraw_invitation(
+                "testuser", confirm_withdraw=True
+            )
+
+        assert result["status"] == "withdrawn"
+        assert result["withdrawn"] is True
+        assert "connectable" in result["message"]
+        assert result["profile"] == WITHDRAWN_TEXT
+        click.assert_awaited_once()
+        primary.assert_awaited_once()
+        sleep.assert_not_awaited()
+
+    async def test_without_confirm_only_reports_pending(self, mock_page):
+        actions = _actions(mock_page, _reads(PENDING_TEXT))
+        p = self._patches(actions, [_PENDING])
+        with p[0], p[1] as click, p[2] as dialog, p[3] as primary, p[4], p[5]:
+            result = await actions.withdraw_invitation("testuser")
+
+        assert result["status"] == "pending"
+        assert result["withdrawn"] is False
+        click.assert_not_awaited()
+        dialog.assert_not_awaited()
+        primary.assert_not_awaited()
+
+    @pytest.mark.parametrize(
+        ("signals", "state"),
+        [
+            (_CONNECTABLE, "connectable"),
+            ({"compose": True}, "already_connected"),
+            ({"edit": True}, "self_profile"),
+            ({"incoming_row": True}, "incoming_request"),
+            ({}, "unavailable"),
+        ],
+    )
+    async def test_a_profile_that_is_not_pending_is_left_alone(
+        self, mock_page, signals, state
+    ):
+        actions = _actions(mock_page, _reads(WITHDRAWN_TEXT))
+        p = self._patches(actions, [signals])
+        with p[0], p[1] as click, p[2], p[3] as primary, p[4], p[5]:
+            result = await actions.withdraw_invitation(
+                "testuser", confirm_withdraw=True
+            )
+
+        assert result["status"] == "not_pending"
+        assert f"state: {state}" in result["message"]
+        click.assert_not_awaited()
+        primary.assert_not_awaited()
+
+    async def test_an_unreadable_profile_is_unavailable(self, mock_page):
+        actions = _actions(mock_page, _reads(""))
+        p = self._patches(actions, [])
+        with p[0] as read_signals, p[1] as click, p[2], p[3], p[4], p[5]:
+            result = await actions.withdraw_invitation(
+                "testuser", confirm_withdraw=True
+            )
+
+        assert result["status"] == "unavailable"
+        read_signals.assert_not_awaited()
+        click.assert_not_awaited()
+
+    async def test_no_pending_control_withdraws_nothing(self, mock_page):
+        actions = _actions(mock_page, _reads(PENDING_TEXT))
+        p = self._patches(actions, [_PENDING], click=False)
+        with p[0], p[1], p[2] as dialog, p[3] as primary, p[4], p[5]:
+            result = await actions.withdraw_invitation(
+                "testuser", confirm_withdraw=True
+            )
+
+        assert result["status"] == "withdraw_failed"
+        assert "Nothing was withdrawn" in result["message"]
+        dialog.assert_not_awaited()
+        primary.assert_not_awaited()
+
+    async def test_no_dialog_withdraws_nothing(self, mock_page):
+        actions = _actions(mock_page, _reads(PENDING_TEXT))
+        p = self._patches(actions, [_PENDING], dialog=False)
+        with p[0], p[1], p[2], p[3] as primary, p[4], p[5]:
+            result = await actions.withdraw_invitation(
+                "testuser", confirm_withdraw=True
+            )
+
+        assert result["status"] == "withdraw_failed"
+        assert "did not open the withdraw dialog" in result["message"]
+        primary.assert_not_awaited()
+
+    async def test_a_failed_confirm_click_closes_the_dialog(self, mock_page):
+        actions = _actions(mock_page, _reads(PENDING_TEXT))
+        p = self._patches(actions, [_PENDING], confirm="no_button")
+        with p[0], p[1], p[2], p[3], p[4] as dismiss, p[5]:
+            result = await actions.withdraw_invitation(
+                "testuser", confirm_withdraw=True
+            )
+
+        assert result["status"] == "withdraw_failed"
+        assert result["withdrawn"] is False
+        assert "Could not confirm" in result["message"]
+        dismiss.assert_awaited_once()
+
+    async def test_a_dialog_that_stays_open_is_a_failure_without_a_reread(
+        self, mock_page
+    ):
+        read = _reads(PENDING_TEXT)
+        actions = _actions(mock_page, read)
+        p = self._patches(actions, [_PENDING], confirm="stayed_open")
+        with p[0] as signals, p[1], p[2], p[3], p[4] as dismiss, p[5]:
+            result = await actions.withdraw_invitation(
+                "testuser", confirm_withdraw=True
+            )
+
+        assert result["status"] == "withdraw_failed"
+        assert result["withdrawn"] is False
+        assert "dialog stayed open" in result["message"]
+        dismiss.assert_awaited_once()
+        read.assert_awaited_once()
+        assert signals.await_count == 1
+        mark = actions._mark_open_dialogs
+        assert isinstance(mark, AsyncMock)
+        mark.assert_awaited_once()
+
+    async def test_withdrawn_on_settle_retry(self, mock_page):
+        actions = _actions(
+            mock_page, _reads(PENDING_TEXT, PENDING_TEXT, WITHDRAWN_TEXT)
+        )
+        p = self._patches(actions, [_PENDING, _PENDING, _CONNECTABLE])
+        with p[0], p[1], p[2], p[3], p[4], p[5] as sleep:
+            result = await actions.withdraw_invitation(
+                "testuser", confirm_withdraw=True
+            )
+
+        assert result["status"] == "withdrawn"
+        sleep.assert_awaited_once()
+
+    async def test_still_pending_after_the_retry_is_a_failure(self, mock_page):
+        actions = _actions(mock_page, _reads(PENDING_TEXT, PENDING_TEXT, PENDING_TEXT))
+        p = self._patches(actions, [_PENDING, _PENDING, _PENDING])
+        with p[0], p[1], p[2], p[3], p[4], p[5]:
+            result = await actions.withdraw_invitation(
+                "testuser", confirm_withdraw=True
+            )
+
+        assert result["status"] == "withdraw_failed"
+        assert result["withdrawn"] is False
+        assert "still shows the invitation as pending" in result["message"]
+
+    async def test_normalizes_a_profile_url(self, mock_page):
+        read = _reads(PENDING_TEXT)
+        actions = _actions(mock_page, read)
+        p = self._patches(actions, [_PENDING])
+        with p[0], p[1], p[2], p[3], p[4], p[5]:
+            result = await actions.withdraw_invitation(
+                "https://www.linkedin.com/in/testuser/"
+            )
+
+        read.assert_awaited_once_with("testuser")
+        assert result["url"] == "https://www.linkedin.com/in/testuser/"
+
+
 class TestInviteDialog:
     async def test_premium_upsell_message_reads_linkedin_dialog_text(self, mock_page):
         """Premium upsell detection returns LinkedIn's raw dialog text."""

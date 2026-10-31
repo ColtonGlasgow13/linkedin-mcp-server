@@ -45,6 +45,7 @@ def _make_mock_extractor(result: dict) -> MagicMock:
     mock.archive_conversation = AsyncMock(return_value=result)
     mock.send_message = AsyncMock(return_value=result)
     mock.get_pending_invitations = AsyncMock(return_value=result)
+    mock.withdraw_invitation = AsyncMock(return_value=result)
     mock.get_my_profile = AsyncMock(return_value=result)
     mock.search_companies = AsyncMock(return_value=result)
     mock.search_posts = AsyncMock(return_value=result)
@@ -262,6 +263,7 @@ _A_VALID_CALL = [
     ("feed", "get_feed", {}),
     ("post", "search_posts", {"keywords": "python"}),
     ("network", "get_pending_invitations", {"kind": "sent"}),
+    ("network", "withdraw_invitation", {"linkedin_username": "alice"}),
 ]
 
 
@@ -2782,6 +2784,48 @@ class TestNetworkTools:
 
         mock_extractor.get_pending_invitations.assert_awaited_once_with(
             limit=500, kind="sent"
+        )
+
+    async def test_withdraw_invitation_defaults_to_a_check(
+        self, mock_context, serve_extractor
+    ):
+        # Without confirm_withdraw the call only reads: an agent that leaves the
+        # flag out must not withdraw anything.
+        mock_extractor = _make_mock_extractor({"url": "u", "status": "pending"})
+
+        from linkedin_mcp_server.tools.network import register_network_tools
+
+        mcp = FastMCP("test")
+        register_network_tools(mcp)
+
+        serve_extractor(mock_extractor)
+        await mcp.call_tool("withdraw_invitation", {"linkedin_username": "alice"})
+
+        mock_extractor.withdraw_invitation.assert_awaited_once_with(
+            "alice", confirm_withdraw=False
+        )
+
+    async def test_withdraw_invitation_normalizes_a_profile_url(
+        self, mock_context, serve_extractor
+    ):
+        mock_extractor = _make_mock_extractor({"url": "u", "status": "withdrawn"})
+
+        from linkedin_mcp_server.tools.network import register_network_tools
+
+        mcp = FastMCP("test")
+        register_network_tools(mcp)
+
+        serve_extractor(mock_extractor)
+        await mcp.call_tool(
+            "withdraw_invitation",
+            {
+                "linkedin_username": "https://www.linkedin.com/in/alice/",
+                "confirm_withdraw": True,
+            },
+        )
+
+        mock_extractor.withdraw_invitation.assert_awaited_once_with(
+            "alice", confirm_withdraw=True
         )
 
     @pytest.mark.parametrize(
