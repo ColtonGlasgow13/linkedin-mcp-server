@@ -47,6 +47,7 @@ from linkedin_mcp_server.linkedin.connection import (
 from linkedin_mcp_server.linkedin.connection_actions import (
     ACTION_SIGNALS_JS,
     CLICK_INCOMING_ACCEPT_JS,
+    CLICK_PENDING_WITHDRAW_JS,
     OPEN_MORE_BUTTON_JS,
     ConnectionActions,
 )
@@ -310,6 +311,8 @@ def pending_top_card(labels: Labels) -> str:
     <a href="/messaging/compose/?profileUrn=urn%3Ali%3Afsd_profile%3ADDD"
       >{labels.message}</a>
     <a href="https://www.linkedin.com/in/florian/"
+      onclick="event.preventDefault();
+        document.body.setAttribute('data-clicked','pending-control')"
       aria-label="{labels.pending}">{labels.pending}</a>
     <button type="button" aria-expanded="false">{labels.more}</button>
   </div>
@@ -589,6 +592,27 @@ class TestActionChoiceIsStructural:
             follow_only_top_card,
             (True, "expander"),
             lambda page, html: _click(page, html, OPEN_MORE_BUTTON_JS),
+        )
+
+    async def test_withdraw_clicks_the_labeled_anchor_only(self, dom_page):
+        # The Pending control is the action root's one labeled anchor; the
+        # Message anchor beside it carries no aria-label and More is a button.
+        await _in_every_locale(
+            dom_page,
+            _both(pending_top_card, sidebar_section),
+            (True, "pending-control"),
+            lambda page, html: _click(page, html, CLICK_PENDING_WITHDRAW_JS),
+        )
+
+    @pytest.mark.parametrize("card", [connected_top_card, connectable_top_card])
+    async def test_withdraw_clicks_nothing_without_a_pending_control(
+        self, dom_page, card
+    ):
+        await _in_every_locale(
+            dom_page,
+            _both(card, sidebar_section),
+            (False, None),
+            lambda page, html: _click(page, html, CLICK_PENDING_WITHDRAW_JS),
         )
 
     async def test_no_more_opener_outside_an_action_root(self, dom_page):

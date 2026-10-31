@@ -21,6 +21,9 @@ work, health checks, or background maintenance.
 - `send_message` and `connect_with_person` are write actions. Use them only when
   the user explicitly authorizes the exact recipient and action. Confirm the
   final message or connection note unless the user has already supplied it.
+- `withdraw_invitation` withdraws a sent invitation, and LinkedIn then blocks a
+  new one to that person for about three weeks. Use `confirm_withdraw` only
+  for people the user asked to withdraw from.
 - Do not retry a failed write action unless the result proves it was not sent.
 
 ## Browser and authentication
@@ -46,8 +49,8 @@ instances, clear profiles, or replace the user's browser session.
 - Content: `get_feed` and `search_posts`.
 - Messages: `get_inbox`, `get_conversation`, and `search_conversations`.
 - Invitations: `get_pending_invitations` (received or sent).
-- Writes: `send_message` and `connect_with_person`, subject to the explicit
-  authorization rules above.
+- Writes: `send_message`, `connect_with_person` and `withdraw_invitation`,
+  subject to the explicit authorization rules above.
 - Cleanup: use `close_session` only when the user asks to end the managed
   browser session or when the current LinkedIn task is finished and no follow-up
   call is expected.

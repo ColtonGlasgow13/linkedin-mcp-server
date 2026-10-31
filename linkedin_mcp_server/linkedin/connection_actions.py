@@ -282,6 +282,35 @@ CLICK_INCOMING_ACCEPT_JS = (
 )
 
 
+# Click the Pending control on a profile whose invitation is still awaiting a
+# response. The control is the labeled <a> in the action root (see
+# ActionSignals.has_labeled_action_anchor), and LinkedIn opens a withdraw
+# confirmation dialog from it. Only the attribute's presence is read, never its
+# value. A labeled invite anchor is Connect, never Pending, so it is skipped,
+# and more than one remaining labeled anchor is ambiguous, so nothing is
+# clicked: the dialog it would open is the only step before an irreversible
+# withdraw.
+CLICK_PENDING_WITHDRAW_JS = (
+    r"""
+(() => {
+"""
+    + _FIND_ACTION_ROOT_FN_JS
+    + r"""
+  const main = document.querySelector('main');
+  if (!main) return false;
+  const actionRoot = findActionRoot(main);
+  if (!actionRoot) return false;
+  const pendingControls = actionRoot.querySelectorAll(
+    'a[aria-label]:not([href*="/preload/custom-invite/"])'
+  );
+  if (pendingControls.length !== 1) return false;
+  pendingControls[0].click();
+  return true;
+})
+"""
+)
+
+
 def _connection_result(
     url: str,
     status: str,
@@ -296,6 +325,26 @@ def _connection_result(
         "status": status,
         "message": message,
         "note_sent": note_sent,
+    }
+    if profile:
+        result["profile"] = profile
+    return result
+
+
+def _withdraw_result(
+    url: str,
+    status: str,
+    message: str,
+    *,
+    withdrawn: bool = False,
+    profile: str = "",
+) -> dict[str, Any]:
+    """Build a structured response for an invitation withdrawal attempt."""
+    result: dict[str, Any] = {
+        "url": url,
+        "status": status,
+        "message": message,
+        "withdrawn": withdrawn,
     }
     if profile:
         result["profile"] = profile
@@ -511,6 +560,22 @@ class ConnectionActions:
             raise
         except Exception:
             logger.debug("Incoming accept click via JS failed", exc_info=True)
+            return False
+
+    async def _click_pending_withdraw(self) -> bool:
+        """Click the profile's Pending control, locale-independently.
+
+        Delegates to ``CLICK_PENDING_WITHDRAW_JS``, which clicks only when the
+        action root holds exactly one labeled anchor. The click opens LinkedIn's
+        confirmation dialog and withdraws nothing by itself. Returns True iff
+        the click landed.
+        """
+        try:
+            return bool(await self._session.run_on_linkedin(CLICK_PENDING_WITHDRAW_JS))
+        except OffLinkedInLandingError:
+            raise
+        except Exception:
+            logger.debug("Pending control click via JS failed", exc_info=True)
             return False
 
     async def _read_action_signals(self, username: str) -> ActionSignals:
@@ -989,5 +1054,103 @@ class ConnectionActions:
             "connected",
             f"Connection request sent. State after send: {verified_state}.",
             note_sent=note_sent,
+            profile=verified_text or page_text,
+        )
+
+    async def withdraw_invitation(
+        self,
+        username: str,
+        *,
+        confirm_withdraw: bool = False,
+    ) -> dict[str, Any]:
+        """Withdraw the pending invitation sent to one member.
+
+        Reads the profile and classifies it with the same structural signals
+        as ``connect_with_person``. Only a ``pending`` profile goes further,
+        and only with ``confirm_withdraw``: the Pending control is clicked,
+        the confirmation dialog's primary button (the last one, as in every
+        LinkedIn dialog) is clicked, and the profile is re-read with one
+        settle retry. Success is the profile no longer reading as pending.
+        Every failure before the dialog's primary button withdraws nothing.
+        """
+        username = normalize_person_identifier(username)
+        url = person_profile_url(username, "/")
+
+        profile = await self._read_main_profile(username)
+        page_text = profile.get("sections", {}).get("main_profile", "")
+        if not page_text:
+            return _withdraw_result(url, "unavailable", "Could not read profile page.")
+
+        signals = await self._read_action_signals(username)
+        state = connection.detect_connection_state(signals)
+        logger.info(
+            "Withdraw signals for %s: state=%s signals=%s", username, state, signals
+        )
+
+        if state != "pending":
+            return _withdraw_result(
+                url,
+                "not_pending",
+                f"No invitation is pending for this profile (state: {state}).",
+                profile=page_text,
+            )
+        if not confirm_withdraw:
+            return _withdraw_result(
+                url,
+                "pending",
+                "An invitation is pending. Call again with confirm_withdraw=True "
+                "to withdraw it.",
+                profile=page_text,
+            )
+
+        if not await self._click_pending_withdraw():
+            return _withdraw_result(
+                url,
+                "withdraw_failed",
+                "Could not find or click the Pending control. Nothing was withdrawn.",
+                profile=page_text,
+            )
+        if not await self._dialog_is_open(timeout=5000):
+            return _withdraw_result(
+                url,
+                "withdraw_failed",
+                "LinkedIn did not open the withdraw dialog. Nothing was withdrawn.",
+                profile=page_text,
+            )
+        if not await self._click_dialog_primary_button():
+            await self._dismiss_dialog()
+            return _withdraw_result(
+                url,
+                "withdraw_failed",
+                "Could not confirm the withdraw dialog. Nothing was withdrawn.",
+                profile=page_text,
+            )
+
+        # The same settle retry as the accept path: an immediate re-read can
+        # still render the old top card.
+        verified_text = ""
+        verified_state = state
+        for attempt in range(2):
+            if attempt:
+                await asyncio.sleep(3.0)
+            verified = await self._read_main_profile(username)
+            verified_text = verified.get("sections", {}).get("main_profile", "")
+            verified_signals = await self._read_action_signals(username)
+            verified_state = connection.detect_connection_state(verified_signals)
+            if verified_state != "pending":
+                break
+        if verified_state == "pending":
+            return _withdraw_result(
+                url,
+                "withdraw_failed",
+                "Confirmed the withdraw dialog, but the profile still shows the "
+                "invitation as pending.",
+                profile=verified_text or page_text,
+            )
+        return _withdraw_result(
+            url,
+            "withdrawn",
+            f"Invitation withdrawn. State after withdraw: {verified_state}.",
+            withdrawn=True,
             profile=verified_text or page_text,
         )

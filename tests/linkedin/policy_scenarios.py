@@ -972,6 +972,36 @@ async def _connect_scenario() -> dict[str, Any]:
     )
 
 
+async def _withdraw_check_scenario() -> dict[str, Any]:
+    """Find an invitation pending and, without confirm_withdraw, click nothing."""
+    name = "withdraw_invitation__pending_unconfirmed"
+    recorder = TraceRecorder(name, _COMMON_ALLOWED)
+    clock = FakeClock(recorder)
+    page = _page(recorder)
+    page.script("evaluate:root_content", _root("Ada Lovelace\nPending"))
+    _script_profile_target(page, "unavailable")
+    page.script(
+        "evaluate:connection_action_signals",
+        {
+            "hasInvite": False,
+            "hasComposeInActionRoot": True,
+            "hasEditIntro": False,
+            "hasLabeledActionButton": False,
+            "hasLabeledActionAnchor": True,
+            "hasIncomingActionRow": False,
+        },
+    )
+    extractor = _extractor(page)
+    async with boundaries(recorder, clock):
+        with recorder.context("withdraw_invitation", "main_profile"):
+            result = await extractor.withdraw_invitation("ada-lovelace")
+    page.assert_clean()
+    return recorder.trace(
+        {"method": "withdraw_invitation", "arguments": {"username": "ada-lovelace"}},
+        result,
+    )
+
+
 async def _sidebar_scenario() -> dict[str, Any]:
     name = "get_sidebar_profiles__baseline"
     recorder = TraceRecorder(name, _COMMON_ALLOWED)
@@ -1144,6 +1174,7 @@ TOOL_FACADE_METHODS = {
     "search_people",
     "search_posts",
     "send_message",
+    "withdraw_invitation",
 }
 COMPATIBILITY_METHODS = {"get_page_text", "click_button_by_text"}
 
@@ -1230,6 +1261,7 @@ async def build_policy_traces() -> dict[str, dict[str, Any]]:
             await _conversation_row_resolution_scenario()
         ),
         "pending-invitations.json": await _pending_invitations_scenario(),
+        "withdraw-invitation-check.json": await _withdraw_check_scenario(),
     }
     return traces
 
