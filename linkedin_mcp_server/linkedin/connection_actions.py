@@ -69,6 +69,21 @@ _DIALOG_TEXTAREA_SELECTOR = '[role="dialog"] textarea, dialog textarea'
 # Inlined into both ACTION_SIGNALS_JS and OPEN_MORE_BUTTON_JS so a
 # single change to the heuristic propagates to both call sites.
 _FIND_ACTION_ROOT_FN_JS = r"""
+function isPendingAnchor(a) {
+  // The Pending control: a labeled <a> that is not the invite deeplink.
+  // Since 2026-11-05 the action row can also hold a labeled "Save" <a>
+  // linking to the same profile URL. LinkedIn tags the Pending anchor's
+  // componentkey with its invitation state
+  // ("ConnectButtonstate:invitation:urn:li:member:<id>_pending") and gives
+  // Save a random one, so an anchor that carries a componentkey counts only
+  // when that key names an invitation. Anchors without a componentkey (the
+  // earlier markup) count as before. The key is an internal identifier, not
+  // translated text.
+  if (!a.hasAttribute('aria-label')) return false;
+  if ((a.getAttribute('href') || '').includes('/preload/custom-invite/')) return false;
+  if (!a.hasAttribute('componentkey')) return true;
+  return /(^|[^a-z])invitation[^a-z]/i.test(a.getAttribute('componentkey'));
+}
 function findActionRoot(main) {
   const composeAnchors = main.querySelectorAll('a[href*="/messaging/compose/"]');
   for (const a of composeAnchors) {
@@ -175,7 +190,9 @@ function findIncomingActionRow(main) {
 #   action root. LinkedIn renders the Pending state as an anchor (linking
 #   back to the profile URL) carrying aria-label like "Pending, click to
 #   withdraw…". The Message anchor has only aria-disabled, so a labeled
-#   anchor is the locale-independent Pending signal.
+#   anchor is the locale-independent Pending signal. A labeled "Save"
+#   anchor (seen 2026-11-05) is excluded by isPendingAnchor's componentkey
+#   check.
 # - hasIncomingActionRow: the incoming-request fingerprint matched (see
 #   _FIND_INCOMING_ACTION_ROW_FN_JS). Computed independently of
 #   findActionRoot, which cannot locate the top-card row on incoming
@@ -217,7 +234,7 @@ ACTION_SIGNALS_JS = (
       }
     }
     for (const a of actionRoot.querySelectorAll('a')) {
-      if (a.hasAttribute('aria-label')) {
+      if (isPendingAnchor(a)) {
         hasLabeledActionAnchor = true;
         break;
       }
@@ -301,8 +318,8 @@ CLICK_PENDING_WITHDRAW_JS = (
   if (!main) return false;
   const actionRoot = findActionRoot(main);
   if (!actionRoot) return false;
-  const pendingControls = actionRoot.querySelectorAll(
-    'a[aria-label]:not([href*="/preload/custom-invite/"])'
+  const pendingControls = [...actionRoot.querySelectorAll('a')].filter(
+    isPendingAnchor
   );
   if (pendingControls.length !== 1) return false;
   pendingControls[0].click();

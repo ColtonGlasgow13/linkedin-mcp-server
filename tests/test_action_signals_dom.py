@@ -320,6 +320,73 @@ def pending_top_card(labels: Labels) -> str:
 """
 
 
+def _save_anchor(user: str) -> str:
+    # Seen live 2026-11-05: a labeled "Save" <a> to the same profile URL as
+    # the Pending control, with a random componentkey.
+    return f"""
+    <a href="https://www.linkedin.com/in/{user}/"
+      componentkey="b94f567e-6a74-445d-b5e3-295cc76f82a8"
+      onclick="event.preventDefault();
+        document.body.setAttribute('data-clicked','save-anchor')"
+      aria-label="save">save</a>"""
+
+
+def pending_with_save_top_card(labels: Labels) -> str:
+    """Pending with LinkedIn's 2026-11 markup: keyed Pending anchor plus Save."""
+    return f"""
+<section class="topcard">
+  <h1>Kelly</h1>
+  <div class="actions">
+    <a href="/messaging/compose/?profileUrn=urn%3Ali%3Afsd_profile%3AGGG"
+      componentkey="0b803039-371e-43d7-bea5-73584df2b222"
+      aria-disabled="false">{labels.message}</a>
+    <div componentkey="a4291ae3-ddf7-4e64-990d-5229db79e335"><div>
+    <a href="https://www.linkedin.com/in/hukellyy/"
+      componentkey="ConnectButtonstate:invitation:urn:li:member:745976183_pending"
+      onclick="event.preventDefault();
+        document.body.setAttribute('data-clicked','pending-control')"
+      aria-label="{labels.pending}">{labels.pending}</a>
+    </div></div>
+    {_save_anchor("hukellyy")}
+    <button type="button" aria-expanded="false">{labels.more}</button>
+  </div>
+</section>
+"""
+
+
+def connected_with_save_top_card(labels: Labels) -> str:
+    """1st degree with the Save anchor: no invitation-keyed anchor."""
+    return f"""
+<section class="topcard">
+  <h1>Fadi</h1>
+  <div class="actions">
+    <a href="/messaging/compose/?profileUrn=urn%3Ali%3Afsd_profile%3AHHH"
+      componentkey="0b803039-371e-43d7-bea5-73584df2b223"
+      aria-disabled="false">{labels.message}</a>
+    {_save_anchor("fadi")}
+    <button type="button" aria-expanded="false">{labels.more}</button>
+  </div>
+</section>
+"""
+
+
+def follow_with_save_top_card(labels: Labels) -> str:
+    """After a withdraw on a Follow-primary profile: Follow, Message, Save."""
+    return f"""
+<section class="topcard">
+  <h1>Mabel</h1>
+  <div class="actions">
+    <button type="button" aria-label="{labels.follow}">{labels.follow}</button>
+    <a href="/messaging/compose/?profileUrn=urn%3Ali%3Afsd_profile%3AIII"
+      componentkey="0b803039-371e-43d7-bea5-73584df2b224"
+      aria-disabled="false">{labels.message}</a>
+    {_save_anchor("mabelchan09")}
+    <button type="button" aria-expanded="false">{labels.more}</button>
+  </div>
+</section>
+"""
+
+
 def connectable_top_card(labels: Labels) -> str:
     """The vanityName invite anchor for *this* user, which is the write gate."""
     return f"""
@@ -498,6 +565,9 @@ STATE_CASES: tuple[tuple[str, Build, ConnectionState], ...] = (
         "incoming_request",
     ),
     ("pending", pending_top_card, "pending"),
+    ("pending-with-save", pending_with_save_top_card, "pending"),
+    ("connected-with-save", connected_with_save_top_card, "already_connected"),
+    ("follow-only-with-save", follow_with_save_top_card, "follow_only"),
     ("already_connected", connected_top_card, "already_connected"),
     ("follow_only", follow_only_top_card, "follow_only"),
     ("unavailable", restricted_top_card, "unavailable"),
@@ -604,7 +674,25 @@ class TestActionChoiceIsStructural:
             lambda page, html: _click(page, html, CLICK_PENDING_WITHDRAW_JS),
         )
 
-    @pytest.mark.parametrize("card", [connected_top_card, connectable_top_card])
+    async def test_withdraw_skips_the_save_anchor(self, dom_page):
+        # The Save anchor is labeled and links to the same profile; only the
+        # invitation-keyed anchor is the Pending control.
+        await _in_every_locale(
+            dom_page,
+            _both(pending_with_save_top_card, sidebar_section),
+            (True, "pending-control"),
+            lambda page, html: _click(page, html, CLICK_PENDING_WITHDRAW_JS),
+        )
+
+    @pytest.mark.parametrize(
+        "card",
+        [
+            connected_top_card,
+            connectable_top_card,
+            connected_with_save_top_card,
+            follow_with_save_top_card,
+        ],
+    )
     async def test_withdraw_clicks_nothing_without_a_pending_control(
         self, dom_page, card
     ):
