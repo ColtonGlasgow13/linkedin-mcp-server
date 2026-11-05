@@ -57,6 +57,7 @@ TOOL_DELEGATES = {
     "get_job_details": "read_job",
     "get_my_profile": "get_my_profile",
     "get_pending_invitations": "get_pending_invitations",
+    "withdraw_invitation": "withdraw_invitation",
     "get_person_profile": "read_person",
     "get_saved_jobs": "get_saved_jobs",
     "dismiss_job": "dismiss_job",

@@ -1139,5 +1139,46 @@
       "type": "object"
     },
     "title": "Send Message"
+  },
+  {
+    "name": "withdraw_invitation",
+    "title": "Withdraw Invitation",
+    "description": "Withdraw the pending connection invitation you sent to one person.\n\nOpens the person's profile and checks that an invitation is pending.\nWith confirm_withdraw False (the default) it stops there and reports\nwhat it found. With confirm_withdraw True it clicks Pending, confirms\nthe withdraw dialog, and re-reads the profile to check the invitation\nis gone. LinkedIn does not let you invite the same person again for\nabout three weeks after a withdrawal. One person per call.",
+    "inputSchema": {
+      "properties": {
+        "linkedin_username": {
+          "type": "string",
+          "description": "LinkedIn username (e.g., \"stickerdaniel\", \"williamhgates\"). A full profile URL is accepted too and is reduced to the username."
+        },
+        "confirm_withdraw": {
+          "default": false,
+          "type": "boolean",
+          "description": "Must be True to withdraw; False only checks"
+        }
+      },
+      "required": [
+        "linkedin_username"
+      ],
+      "type": "object",
+      "additionalProperties": false
+    },
+    "outputSchema": {
+      "type": "object",
+      "additionalProperties": true
+    },
+    "annotations": {
+      "readOnlyHint": false,
+      "destructiveHint": true,
+      "idempotentHint": true,
+      "openWorldHint": true
+    },
+    "_meta": {
+      "fastmcp": {
+        "tags": [
+          "actions",
+          "network"
+        ]
+      }
+    }
   }
 ]

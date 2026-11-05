@@ -133,6 +133,10 @@
       "description": "List pending LinkedIn connection invitations, received or sent"
     },
     {
+      "name": "withdraw_invitation",
+      "description": "Withdraw one pending LinkedIn connection invitation you sent, only with explicit confirmation"
+    },
+    {
       "name": "get_feed",
       "description": "Get recent posts from the authenticated user's LinkedIn home feed"
     },
