@@ -32,6 +32,7 @@ import logging
 
 from patchright.async_api import TimeoutError as PlaywrightTimeoutError
 
+from linkedin_mcp_server.debug_trace import record_page_trace
 from linkedin_mcp_server.core.destination import (
     linkedin_element,
     linkedin_handle,
@@ -382,6 +383,9 @@ NEW_DIALOG_OPEN_JS = (
 # a trusted click from Python. Nothing is tagged unless exactly one new dialog
 # is open and it holds at least two visible buttons (dismiss plus primary), so
 # a lone close button is never mistaken for the confirmation.
+# The dialog shell can show before its footer renders (measured live on
+# 2026-11-01: one new dialog holding only its dismiss button), so the caller
+# polls this until it tags or its render timeout runs out.
 TAG_WITHDRAW_CONFIRM_JS = (
     r"""
 ((selector) => {
@@ -398,7 +402,23 @@ TAG_WITHDRAW_CONFIRM_JS = (
   const dialogs = newDialogs(selector);
   if (dialogs.length !== 1) return {dialogs: dialogs.length, buttons: 0, tagged: false};
   const buttons = [...dialogs[0].querySelectorAll('button, [role="button"]')].filter(visible);
-  if (buttons.length < 2) return {dialogs: 1, buttons: buttons.length, tagged: false};
+  if (buttons.length < 2) {
+    // Structure only, never text: enough to tell a footer that has not
+    // rendered yet from a different single-button dialog.
+    const shape = buttons.map((b) => ({
+      tag: b.tagName.toLowerCase(),
+      aria: b.hasAttribute('aria-label'),
+      type: b.getAttribute('type'),
+    }));
+    return {
+      dialogs: 1,
+      buttons: buttons.length,
+      tagged: false,
+      shape,
+      all_buttons: dialogs[0].querySelectorAll('button, [role="button"]').length,
+      descendants: dialogs[0].querySelectorAll('*').length,
+    };
+  }
   buttons[buttons.length - 1].setAttribute('"""
     + _WITHDRAW_CONFIRM_ATTR
     + r"""', '');
@@ -708,26 +728,42 @@ class ConnectionActions:
                 return False
             await asyncio.sleep(0.25)
 
-    async def _confirm_withdraw_dialog(self, *, timeout: float = 5.0) -> str:
+    async def _confirm_withdraw_dialog(
+        self, *, timeout: float = 5.0, render_timeout: float = 4.0
+    ) -> str:
         """Click the withdraw dialog's primary button and wait for it to close.
 
         Returns ``"confirmed"`` when the dialog closed after the click,
         ``"no_button"`` when no primary button could be identified or clicked
         (nothing was confirmed), and ``"stayed_open"`` when the click landed
-        but the dialog is still open.
+        but the dialog is still open. Waits up to ``render_timeout`` seconds
+        for the dialog's footer buttons to render before giving up.
         """
-        try:
-            tag = await self._session.run_on_linkedin(
-                TAG_WITHDRAW_CONFIRM_JS, _DIALOG_SELECTOR
-            )
-        except OffLinkedInLandingError:
-            raise
-        except Exception:
-            logger.debug("Tagging the withdraw confirm button failed", exc_info=True)
-            tag = None
-        if not isinstance(tag, dict) or not tag.get("tagged"):
-            logger.warning("Withdraw dialog primary button not identified: %s", tag)
-            return "no_button"
+        loop = asyncio.get_running_loop()
+        render_deadline = loop.time() + render_timeout
+        while True:
+            try:
+                tag = await self._session.run_on_linkedin(
+                    TAG_WITHDRAW_CONFIRM_JS, _DIALOG_SELECTOR
+                )
+            except OffLinkedInLandingError:
+                raise
+            except Exception:
+                logger.debug(
+                    "Tagging the withdraw confirm button failed", exc_info=True
+                )
+                tag = None
+            if isinstance(tag, dict) and tag.get("tagged"):
+                break
+            if loop.time() >= render_deadline:
+                logger.warning("Withdraw dialog primary button not identified: %s", tag)
+                await record_page_trace(
+                    self._session.page,
+                    "withdraw-confirm-not-identified",
+                    extra={"tag": tag},
+                )
+                return "no_button"
+            await asyncio.sleep(0.25)
         try:
             async with linkedin_element(
                 self._session.page.locator(f"[{_WITHDRAW_CONFIRM_ATTR}]").first,

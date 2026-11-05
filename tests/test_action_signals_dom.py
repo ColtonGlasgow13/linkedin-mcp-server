@@ -738,12 +738,57 @@ class TestWithdrawDialogScope:
             == "withdraw"
         )
 
+    async def test_waits_for_a_footer_that_renders_late(self, dom_page):
+        await dom_page.set_content(_page_html(pending_top_card(ENGLISH), _OTHER_DIALOG))
+        actions = _actions(dom_page)
+        await actions._mark_open_dialogs()
+        # The shell shows with only its dismiss button; Cancel and Withdraw
+        # arrive 600 ms later, as measured live on 2026-11-01.
+        full = _withdraw_dialog()
+        await _open_withdraw_dialog(
+            dom_page, '<div role="dialog"><button aria-label="d">x</button></div>'
+        )
+        await dom_page.evaluate(
+            """(html) => setTimeout(() => {
+                document.querySelector('[role=dialog]').outerHTML = html;
+            }, 600)""",
+            full,
+        )
+
+        assert await actions._confirm_withdraw_dialog(timeout=2) == "confirmed"
+        assert (
+            await dom_page.evaluate("document.body.getAttribute('data-clicked')")
+            == "withdraw"
+        )
+
+    async def test_a_lone_dismiss_button_is_never_clicked(self, dom_page):
+        await dom_page.set_content(_page_html(pending_top_card(ENGLISH), _OTHER_DIALOG))
+        actions = _actions(dom_page)
+        await actions._mark_open_dialogs()
+        await _open_withdraw_dialog(
+            dom_page,
+            '<div role="dialog"><button aria-label="d" onclick="'
+            "document.body.setAttribute('data-clicked','dismiss')\">x</button></div>",
+        )
+
+        assert (
+            await actions._confirm_withdraw_dialog(timeout=1, render_timeout=0.6)
+            == "no_button"
+        )
+        assert (
+            await dom_page.evaluate("document.body.getAttribute('data-clicked')")
+            is None
+        )
+
     async def test_nothing_is_clicked_without_a_new_dialog(self, dom_page):
         await dom_page.set_content(_page_html(pending_top_card(ENGLISH), _OTHER_DIALOG))
         actions = _actions(dom_page)
         await actions._mark_open_dialogs()
 
-        assert await actions._confirm_withdraw_dialog(timeout=0.5) == "no_button"
+        assert (
+            await actions._confirm_withdraw_dialog(timeout=0.5, render_timeout=0.5)
+            == "no_button"
+        )
         assert (
             await dom_page.evaluate("document.body.getAttribute('data-clicked')")
             is None
