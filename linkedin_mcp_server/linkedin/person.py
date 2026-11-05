@@ -77,7 +77,7 @@ _HEADING_INDENT = " " * 20
 _SIDEBAR_PROFILES_JS = """() => {
                 const SIDEBAR_SECTIONS = [
                     __SECTION_HEADINGS__
-                ];
+                ].map(heading => heading.toLowerCase());
                 const normalize = text => (text || '').replace(/\\s+/g, ' ').trim();
                 const slugify = text => text.toLowerCase().replace(/\\s+/g, '_');
                 const extractProfilePath = href => {
@@ -98,7 +98,9 @@ _SIDEBAR_PROFILES_JS = """() => {
                     const headingText = normalize(
                         heading.innerText || heading.textContent
                     );
-                    if (!SIDEBAR_SECTIONS.includes(headingText)) continue;
+                    // LinkedIn changes the casing of these headings ("Explore
+                    // Premium profiles" since 2026-10), so match case-insensitively.
+                    if (!SIDEBAR_SECTIONS.includes(headingText.toLowerCase())) continue;
 
                     const sectionKey = slugify(headingText);
 
