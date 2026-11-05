@@ -437,16 +437,16 @@ class TestBuildReferences:
                 "href": f"https://www.linkedin.com/jobs/view/{idx}/",
                 "text": f"Job {idx}",
             }
-            for idx in range(20)
+            for idx in range(50)
         ]
 
         capped = build_references(raw, "search_results")
         uncapped = build_references(raw, "search_results", apply_cap=False)
 
-        assert len(capped) == 15
-        assert capped[-1]["url"] == "/jobs/view/14/"
-        assert len(uncapped) == 20
-        assert uncapped[-1]["url"] == "/jobs/view/19/"
+        assert len(capped) == 40
+        assert capped[-1]["url"] == "/jobs/view/39/"
+        assert len(uncapped) == 50
+        assert uncapped[-1]["url"] == "/jobs/view/49/"
 
     def test_caps_jobs_section_more_tightly(self):
         raw: list[RawReference] = [

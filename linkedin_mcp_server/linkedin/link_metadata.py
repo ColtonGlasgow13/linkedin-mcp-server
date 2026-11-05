@@ -95,6 +95,7 @@ _SECTION_CONTEXTS = {
 
 _DEFAULT_REFERENCE_CAP = 12
 _SEARCH_RESULTS_REFERENCE_CAP = 15
+_PEOPLE_SEARCH_REFERENCE_CAP = 40
 _REFERENCE_CAPS = {
     "main_profile": 12,
     "about": 12,
@@ -109,7 +110,11 @@ _REFERENCE_CAPS = {
     "posts": 12,
     "jobs": 8,
     "employees": 12,
-    "search_results": _SEARCH_RESULTS_REFERENCE_CAP,
+    # A people-search page holds 10 cards, each linking the person and up to
+    # two named mutual connections, so 15 cut off the last cards' own profile
+    # links. Job search still trims to _SEARCH_RESULTS_REFERENCE_CAP in
+    # job_policy; company and conversation searches just keep more links.
+    "search_results": _PEOPLE_SEARCH_REFERENCE_CAP,
     # The "More jobs" module sits at the bottom of a posting and lists a dozen
     # jobs, so a cap applied in page order has to reach past everything above.
     "job_posting": 25,
