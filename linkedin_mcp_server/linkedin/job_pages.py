@@ -14,9 +14,11 @@ import asyncio
 import logging
 import re
 import time
+from urllib.parse import urlparse
 
 from patchright.async_api import TimeoutError as PlaywrightTimeoutError
 
+from linkedin_mcp_server.core.destination import linkedin_element
 from linkedin_mcp_server.core.exceptions import LinkedInOperationError
 from linkedin_mcp_server.core.utils import (
     _JOB_CARD_SELECTOR,
@@ -223,6 +225,65 @@ APPLY_READY_JS = (
 # How long the apply control gets to render.
 _APPLY_READY_TIMEOUT = 10.0
 
+# The external Apply as a button, measured on 2026-11-11: a `<button>` in the
+# top card whose whole text is the external label, with no href. Its address
+# exists only after a click, in the "Share your profile?" dialog's Continue
+# link (a `/safety/go` interstitial), or in the tab a click opens directly.
+# Answers the button's index among `main button`, or -1.
+APPLY_BUTTON_JS = r"""(opts) => {
+    const {externalLabel, descriptionHeadings} = opts;
+    const main = document.querySelector('main');
+    if (!main) return -1;
+    const walk = document.createTreeWalker(main, NodeFilter.SHOW_TEXT);
+    let heading = null;
+    while (walk.nextNode()) {
+        if (descriptionHeadings.includes((walk.currentNode.nodeValue || '').trim())) {
+            heading = walk.currentNode;
+            break;
+        }
+    }
+    if (!heading) return -1;
+    const buttons = [...main.querySelectorAll('button')];
+    return buttons.findIndex((el) =>
+        (heading.compareDocumentPosition(el) & Node.DOCUMENT_POSITION_PRECEDING)
+        && (el.innerText || '').trim() === externalLabel);
+}"""
+
+# The interstitial link inside an open modal dialog. Structural, not textual:
+# the description's own outbound links are `/safety/go` links too, but never
+# inside a dialog.
+APPLY_DIALOG_LINK_JS = r"""(opts) => {
+    const {redirectPath} = opts;
+    for (const dialog of document.querySelectorAll('dialog[open], [aria-modal="true"]')) {
+        for (const anchor of dialog.querySelectorAll('a[href]')) {
+            try {
+                if (new URL(anchor.href).pathname.replace(/\/+$/, '') === redirectPath) {
+                    return anchor.href;
+                }
+            } catch (error) {}
+        }
+    }
+    return null;
+}"""
+
+# How long a clicked external Apply gets to reveal its address.
+_APPLY_OPEN_TIMEOUT = 8.0
+
+
+def _leaves_linkedin(url: str) -> bool:
+    """Whether a top-level navigation to *url* would leave LinkedIn.
+
+    The interstitial counts as leaving: it redirects to the employer, and a
+    route never sees a redirect, so it is stopped before it is asked for.
+    """
+    parsed = urlparse(url)
+    host = (parsed.hostname or "").removesuffix(".")
+    if parsed.scheme == "about":
+        return False
+    if host != "linkedin.com" and not host.endswith(".linkedin.com"):
+        return True
+    return parsed.path.rstrip("/") == SAFETY_REDIRECT_PATH
+
 
 @dataclass(frozen=True, slots=True)
 class JobApplyRead:
@@ -309,18 +370,30 @@ class JobPageReader:
         )
 
     async def read_apply_link(
-        self, url: str, job_id: str, text: JobApplyTextTable
+        self,
+        url: str,
+        job_id: str,
+        text: JobApplyTextTable,
+        *,
+        open_apply: bool = False,
     ) -> JobApplyRead:
         """Read how a posting takes applications, and an external one's address.
 
-        Nothing is clicked. An external Apply is a link whose href names the
-        employer's address; a posting whose Apply is anything else answers
-        `unknown`.
+        By default nothing is clicked. An external Apply is a link whose href
+        names the employer's address; a posting whose Apply is anything else
+        answers `unknown`.
+
+        With *open_apply*, an external Apply that is a button is clicked to
+        reveal its address. LinkedIn counts that click as the account
+        clicking Apply on the posting, so a caller opts in only for postings
+        it means to apply to. The share-profile dialog's Continue is never
+        clicked, and the dialog is dismissed afterwards.
 
         The employer's address is answered as LinkedIn gives it and never
         loaded. It comes from whoever posted the job, and loading it would let
         a stranger's link, or any redirect behind it, send a request from this
-        host to whatever the host can reach.
+        host to whatever the host can reach. While a button is open, every
+        top-level navigation off LinkedIn is aborted before it is sent.
         """
         await self._navigator._navigate_to_page(url)
         await self._session.check_rate_limit()
@@ -354,10 +427,82 @@ class JobPageReader:
             return JobApplyRead(
                 "external", employer_apply_url(signals["external_link"])
             )
+        if open_apply and signals and signals["bounded"]:
+            opened = await self._open_external_apply(opts)
+            if opened is not None:
+                return JobApplyRead("external", opened or None)
         # A barrier served in place of the posting renders none of the above
         # either, and it needs the relogin path rather than a type.
         await self._navigator._raise_if_auth_barrier(url)
         return JobApplyRead("unknown")
+
+    async def _open_external_apply(self, opts: dict) -> str | None:
+        """Click an external Apply button and read the address it reveals.
+
+        Answers None when the posting has no such button, an empty string when
+        the click revealed no usable address, and the employer's address
+        otherwise. The address comes from the share-profile dialog's
+        interstitial link, or from a top-level navigation the click started,
+        which is aborted before it is sent.
+        """
+        page = self._session.page
+        index = await self._session.run_on_linkedin(APPLY_BUTTON_JS, opts)
+        if not isinstance(index, int) or index < 0:
+            return None
+        context = page.context
+        caught: list[str] = []
+        opened: list = []
+
+        async def stop_leaving(intercepted) -> None:
+            request = intercepted.request
+            try:
+                top = (
+                    request.is_navigation_request()
+                    and request.frame.parent_frame is None
+                )
+            except Exception:
+                top = request.is_navigation_request()
+            if top and _leaves_linkedin(request.url):
+                caught.append(request.url)
+                await intercepted.abort()
+            else:
+                await intercepted.fallback()
+
+        def on_page(new_page) -> None:
+            opened.append(new_page)
+
+        await context.route("**/*", stop_leaving)
+        context.on("page", on_page)
+        try:
+            async with linkedin_element(
+                page.locator("main button").nth(index), timeout=2000
+            ) as button:
+                await button.click()
+            deadline = time.monotonic() + _APPLY_OPEN_TIMEOUT
+            href: str | None = None
+            while time.monotonic() < deadline:
+                if caught:
+                    href = caught[0]
+                    break
+                href = await self._session.run_on_linkedin(APPLY_DIALOG_LINK_JS, opts)
+                if href:
+                    break
+                await asyncio.sleep(0.25)
+        finally:
+            context.remove_listener("page", on_page)
+            for extra in opened:
+                try:
+                    await extra.close()
+                except Exception as e:  # pragma: no cover - best effort
+                    logger.debug("Could not close the tab Apply opened: %s", e)
+            await context.unroute("**/*", stop_leaving)
+        try:
+            await page.keyboard.press("Escape")
+        except Exception as e:  # pragma: no cover - best effort
+            logger.debug("Could not dismiss the apply dialog: %s", e)
+        if not href:
+            return ""
+        return employer_apply_url(href) or ""
 
     async def _extract_job_ids(self, *, scoped: bool = False) -> list[str]:
         """Extract unique job IDs from job card links on the current page.

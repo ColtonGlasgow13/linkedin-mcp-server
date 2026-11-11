@@ -159,14 +159,16 @@ def _short_waits(monkeypatch):
     monkeypatch.setattr(job_pages, "_APPLY_READY_TIMEOUT", 1.0)
 
 
-async def read(page, html: str) -> JobApplyRead:
+async def read(page, html: str, *, open_apply: bool = False) -> JobApplyRead:
     """Serve ``html`` as the posting and read it the way the workflow does."""
     await page.goto(JOB_URL)
     await page.set_content(html)
     session = PageSession(page)
     reader = JobPageReader(session, PageNavigator(session), PageContentReader(session))
     with patch.object(reader._navigator, "_navigate_to_page", new_callable=AsyncMock):
-        return await reader.read_apply_link(JOB_URL, "123", JOB_APPLY_EN_US)
+        return await reader.read_apply_link(
+            JOB_URL, "123", JOB_APPLY_EN_US, open_apply=open_apply
+        )
 
 
 async def test_easy_apply_is_the_postings_own_apply_route(dom_page):
@@ -302,3 +304,82 @@ async def test_state_lines_below_the_description_belong_to_other_postings(dom_pa
 
 async def test_a_posting_with_nothing_to_read_is_unknown(dom_page):
     assert await read(dom_page, posting(OTHER_EASY_APPLY)) == JobApplyRead("unknown")
+
+
+def click_opens_tab(href: str) -> str:
+    return f"""
+    document.querySelector('main button').addEventListener('click', () => {{
+        document.body.dataset.clicked = 'true';
+        window.open("{href}", "_blank");
+    }});
+    """
+
+
+async def continued(page) -> bool:
+    return await page.evaluate("() => document.body.dataset.continued === 'true'")
+
+
+async def test_an_opened_apply_button_reads_the_dialogs_continue_link(
+    dom_page, requested
+):
+    """The shape measured on 2026-11-11: Apply opens "Share your profile?"."""
+    script = (
+        click_opens_dialog(safety(EMPLOYER_LINK))
+        + """
+    document.addEventListener('click', (event) => {
+        if (event.target.closest('dialog a')) document.body.dataset.continued = 'true';
+    }, true);
+    """
+    )
+    below = external_link(safety("https://acme.example/"))
+    html = posting(EXTERNAL, below=below, script=script)
+
+    assert await read(dom_page, html, open_apply=True) == JobApplyRead(
+        "external", EMPLOYER_LINK
+    )
+    assert await clicked(dom_page)
+    assert not await continued(dom_page)
+    assert not any("/safety/go" in url for url in requested)
+    assert not any(EMPLOYER_HOST in url for url in requested)
+
+
+async def test_an_opened_apply_button_that_opens_a_tab_is_stopped_before_loading(
+    dom_page, requested
+):
+    html = posting(EXTERNAL, script=click_opens_tab(EMPLOYER_LINK))
+
+    assert await read(dom_page, html, open_apply=True) == JobApplyRead(
+        "external", EMPLOYER_LINK
+    )
+    assert not any(EMPLOYER_HOST in url for url in requested)
+    assert len(dom_page.context.pages) == 1
+
+
+async def test_an_opened_apply_button_through_the_interstitial_is_stopped_too(
+    dom_page, requested
+):
+    html = posting(EXTERNAL, script=click_opens_tab(safety(EMPLOYER_LINK)))
+
+    assert await read(dom_page, html, open_apply=True) == JobApplyRead(
+        "external", EMPLOYER_LINK
+    )
+    assert not any("/safety/go" in url for url in requested)
+    assert not any(EMPLOYER_HOST in url for url in requested)
+
+
+async def test_an_opened_apply_button_that_reveals_nothing_is_external_without_a_link(
+    dom_page, monkeypatch
+):
+    monkeypatch.setattr(job_pages, "_APPLY_OPEN_TIMEOUT", 0.5)
+    html = posting(
+        EXTERNAL, script=click_opens_dialog("https://www.linkedin.com/in/x/")
+    )
+
+    assert await read(dom_page, html, open_apply=True) == JobApplyRead("external")
+
+
+async def test_open_apply_ignores_an_apply_button_below_the_description(dom_page):
+    html = posting("", below=EXTERNAL, script=click_opens_dialog(safety(EMPLOYER_LINK)))
+
+    assert await read(dom_page, html, open_apply=True) == JobApplyRead("unknown")
+    assert not await clicked(dom_page)

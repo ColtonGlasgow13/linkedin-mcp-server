@@ -917,7 +917,7 @@ async def _job_apply_scenario() -> dict[str, Any]:
     arguments = {"job_id": "123"}
     async with boundaries(recorder, clock):
         with recorder.context("get_job_apply_url"):
-            result = await extractor.get_job_apply_url(**arguments)
+            result = await extractor.get_job_apply_url(arguments["job_id"])
     page.assert_clean()
     return recorder.trace(
         {"method": "get_job_apply_url", "arguments": arguments}, result

@@ -1441,7 +1441,9 @@ class TestJobTools:
         tool_fn = await get_tool_fn(mcp, "get_job_apply_url")
         result = await tool_fn("12345", mock_context)
         assert result == expected
-        mock_extractor.get_job_apply_url.assert_awaited_once_with("12345")
+        mock_extractor.get_job_apply_url.assert_awaited_once_with(
+            "12345", open_apply=False
+        )
 
     async def test_search_jobs(self, mock_context, serve_extractor):
         expected = {

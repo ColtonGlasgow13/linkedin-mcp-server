@@ -78,15 +78,21 @@ def register_job_tools(
     async def get_job_apply_url(
         job_id: str,
         ctx: Context,
+        open_apply: bool = False,
     ) -> dict[str, Any]:
         """
         Get how a job posting takes applications, and the employer's application link.
 
-        Reads the posting without clicking anything.
+        By default reads the posting without clicking anything. Many external
+        postings show Apply as a button with no link; set open_apply to click
+        it and read the employer's link from what it reveals. LinkedIn counts
+        that click as clicking Apply on the posting, so use it only for jobs
+        you are applying to. The employer's site is never loaded either way.
 
         Args:
             job_id: LinkedIn job ID (e.g., "4252026496", "3856789012")
             ctx: FastMCP context for progress reporting
+            open_apply: Click a link-less external Apply button (default false)
 
         Returns:
             Dict with url and apply: {type, url?}. type is easy_apply,
@@ -101,7 +107,7 @@ def register_job_tools(
 
         await ctx.report_progress(progress=0, total=100, message="Opening job posting")
 
-        result = await extractor.get_job_apply_url(job_id)
+        result = await extractor.get_job_apply_url(job_id, open_apply=open_apply)
 
         await ctx.report_progress(progress=100, total=100, message="Complete")
 

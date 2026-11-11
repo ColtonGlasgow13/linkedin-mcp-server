@@ -42,7 +42,7 @@
       },
       "get_job_apply_url": {
         "coroutine": true,
-        "signature": "(self, job_id: 'str') -> 'dict[str, Any]'"
+        "signature": "(self, job_id: 'str', *, open_apply: 'bool' = False) -> 'dict[str, Any]'"
       },
       "get_my_profile": {
         "coroutine": true,
@@ -353,6 +353,11 @@
             "job_id": {
               "description": "LinkedIn job ID (e.g., \"4252026496\", \"3856789012\")",
               "type": "string"
+            },
+            "open_apply": {
+              "default": false,
+              "description": "Click a link-less external Apply button (default false)",
+              "type": "boolean"
             }
           },
           "required": [

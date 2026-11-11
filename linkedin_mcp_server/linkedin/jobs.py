@@ -143,8 +143,13 @@ class JobReader:
             result["section_errors"] = section_errors
         return result
 
-    async def get_job_apply_url(self, job_id: str) -> dict[str, Any]:
+    async def get_job_apply_url(
+        self, job_id: str, *, open_apply: bool = False
+    ) -> dict[str, Any]:
         """Read how a posting takes applications and where the employer's form is.
+
+        *open_apply* clicks an external Apply that is a button to reveal its
+        address; see `JobPageReader.read_apply_link`.
 
         Returns:
             {url, apply: {type, url?}}, or {url, section_errors} when the
@@ -154,7 +159,9 @@ class JobReader:
         job_id = normalize_job_id(job_id)
         url = job_view_url(job_id, "/")
         try:
-            read = await self._pages.read_apply_link(url, job_id, self._apply_text)
+            read = await self._pages.read_apply_link(
+                url, job_id, self._apply_text, open_apply=open_apply
+            )
         except LinkedInOperationError:
             raise
         except Exception as e:

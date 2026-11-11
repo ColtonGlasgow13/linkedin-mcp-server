@@ -255,7 +255,9 @@ class TestGetJobApplyUrl:
         with self._reading(reader, return_value=read) as read_apply_link:
             result = await reader.get_job_apply_url("12345")
 
-        read_apply_link.assert_awaited_once_with(self.URL, "12345", JOB_APPLY_EN_US)
+        read_apply_link.assert_awaited_once_with(
+            self.URL, "12345", JOB_APPLY_EN_US, open_apply=False
+        )
         assert result == {
             "url": self.URL,
             "apply": {"type": "external", "url": "https://jobs.example.com/1"},
