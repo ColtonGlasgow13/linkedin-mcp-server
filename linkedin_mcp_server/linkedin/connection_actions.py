@@ -95,8 +95,30 @@ function isConnectAnchor(a) {
   // componentkey names an invitation in the "_connect" state. Like the
   // Pending check this reads an internal identifier, not translated text.
   if (!a.hasAttribute('aria-label')) return false;
+  return isConnectKey(a);
+}
+function isConnectKey(el) {
   return /(^|[^a-z])invitation[^a-z].*_connect$/i.test(
-    a.getAttribute('componentkey') || ''
+    el.getAttribute('componentkey') || ''
+  );
+}
+function isMenuConnectAnchor(a, username) {
+  // The More menu's Connect item in the 2026-11-11 markup: an unlabeled
+  // <a role="menuitem"> keyed "..._connect" that links to the profile URL.
+  // The menu is portal-rendered outside <main>, so it is matched by the
+  // target's own /in/USER/ path and the menu role, which rules out sidebar
+  // Connect controls for other members.
+  if (!a.closest('[role="menu"]')) return false;
+  if (!isConnectKey(a)) return false;
+  let path = '';
+  try {
+    path = new URL(a.getAttribute('href') || '', location.href).pathname;
+  } catch (e) {
+    return false;
+  }
+  return (
+    decodeURIComponent(path).replace(/\/+$/, '').toLowerCase() ===
+    `/in/${username}`.toLowerCase()
   );
 }
 function findActionRoot(main) {
@@ -243,7 +265,10 @@ ACTION_SIGNALS_JS = (
   // members never count.
   const hasInvite =
     !!document.querySelector(inviteSel) ||
-    (!!actionRoot && [...actionRoot.querySelectorAll('a')].some(isConnectAnchor));
+    (!!actionRoot && [...actionRoot.querySelectorAll('a')].some(isConnectAnchor)) ||
+    [...document.querySelectorAll('[role="menu"] a')].some(
+      (a) => isMenuConnectAnchor(a, username)
+    );
 
   let hasComposeInActionRoot = false;
   let hasLabeledActionButton = false;
@@ -695,7 +720,12 @@ class ConnectionActions:
         if not clicked:
             return False
         try:
-            await self._session.page.wait_for_selector("[role='menu']", timeout=3000)
+            # A visible menu only: profiles with a background video carry
+            # hidden video-player menus earlier in the DOM, and waiting on
+            # the first [role='menu'] match timed out on them (2026-11-11).
+            await self._session.page.wait_for_selector(
+                "[role='menu'] >> visible=true", timeout=3000
+            )
             return True
         except PlaywrightTimeoutError:
             logger.debug("More menu did not appear after click")

@@ -928,3 +928,80 @@ class TestWithdrawDialogScope:
             await dom_page.evaluate("document.body.getAttribute('data-clicked')")
             is None
         )
+
+
+def _keyed_menu(labels: Labels, href_user: str, *, hidden: bool = False) -> str:
+    """The profile More menu in the 2026-11-11 markup, read live on a
+    Follow-primary profile: portal-rendered outside <main>, its Connect item
+    an unlabeled menuitem <a> keyed "..._connect" that links to the profile."""
+    style = ' style="display:none"' if hidden else ""
+    return f"""
+<div role="menu"{style}>
+  <a role="menuitem" href="/messaging/compose/?body=x"
+    componentkey="6bae0163-d7a7-48dc-8c16-5382ca1227e8">{labels.message}</a>
+  <a role="menuitem" href="https://www.linkedin.com/in/{href_user}/"
+    componentkey="ConnectButtonstate:invitation:urn:li:member:433634767_connect">
+    <div aria-label="{labels.connect}"
+      componentkey="ConnectButtonstate:invitation:urn:li:member:433634767_connect"
+      >{labels.connect}</div></a>
+</div>"""
+
+
+def _hidden_video_menu() -> str:
+    """A video.js captions menu: in the DOM before the profile menu, hidden."""
+    return """
+<ul class="vjs-menu-content" role="menu" style="display:none">
+  <li role="menuitem">subtitles settings</li>
+</ul>"""
+
+
+class TestKeyedMoreMenu:
+    """Connect under More on Follow-primary profiles, in all four label sets."""
+
+    @staticmethod
+    def _read_with_menu(href_user: str):
+        async def read(page, html: str) -> ConnectionState:
+            # The menu's words are never read, so one label set serves.
+            await page.set_content(
+                f"<html><body><main>{html}</main>"
+                f"{_keyed_menu(ENGLISH, href_user)}</body></html>"
+            )
+            signals = await _actions(page)._read_action_signals(USER)
+            return detect_connection_state(signals)
+
+        return read
+
+    async def test_the_targets_menu_connect_opens_the_write_gate(self, dom_page):
+        await _in_every_locale(
+            dom_page,
+            follow_only_top_card,
+            "connectable",
+            self._read_with_menu(USER),
+        )
+
+    async def test_another_members_menu_connect_does_not(self, dom_page):
+        await _in_every_locale(
+            dom_page,
+            follow_only_top_card,
+            "follow_only",
+            self._read_with_menu("someone-else"),
+        )
+
+    async def test_more_opener_waits_for_the_visible_menu(self, dom_page):
+        # The click handler reveals the profile menu; a hidden video-player
+        # menu precedes it in the DOM.
+        await dom_page.set_content(
+            "<html><body><main>"
+            + follow_only_top_card(ENGLISH).replace(
+                "document.body.setAttribute('data-clicked','expander')",
+                "document.getElementById('pm').style.display='block'",
+            )
+            + "</main>"
+            + _hidden_video_menu()
+            + _keyed_menu(ENGLISH, USER, hidden=True).replace(
+                '<div role="menu" style="display:none">',
+                '<div id="pm" role="menu" style="display:none">',
+            )
+            + "</body></html>"
+        )
+        assert await _actions(dom_page)._open_more_menu() is True
