@@ -330,12 +330,17 @@
   {
     "name": "get_job_apply_url",
     "title": "Get Job Apply URL",
-    "description": "Get how a job posting takes applications, and the employer's application link.\n\nReads the posting without clicking anything.",
+    "description": "Get how a job posting takes applications, and the employer's application link.\n\nBy default reads the posting without clicking anything. Many external\npostings show Apply as a button with no link; set open_apply to click\nit and read the employer's link from what it reveals. LinkedIn counts\nthat click as clicking Apply on the posting, so use it only for jobs\nyou are applying to. The employer's site is never loaded either way.",
     "inputSchema": {
       "properties": {
         "job_id": {
           "type": "string",
           "description": "LinkedIn job ID (e.g., \"4252026496\", \"3856789012\")"
+        },
+        "open_apply": {
+          "default": false,
+          "type": "boolean",
+          "description": "Click a link-less external Apply button (default false)"
         }
       },
       "required": [

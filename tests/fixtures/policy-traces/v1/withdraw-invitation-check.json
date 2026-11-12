@@ -123,7 +123,7 @@
       "call": "withdraw_invitation",
       "kind": "evaluate",
       "operation": "connection_action_signals",
-      "program_digest": "56da0353c7cb",
+      "program_digest": "54e1447b66c4",
       "section": "main_profile"
     }
   ],
