@@ -79,10 +79,25 @@ function isPendingAnchor(a) {
   // when that key names an invitation. Anchors without a componentkey (the
   // earlier markup) count as before. The key is an internal identifier, not
   // translated text.
+  //
+  // Since 2026-11-11 Connect itself can render the same way: a labeled <a>
+  // to the profile URL whose key ends in the "_connect" state
+  // ("ConnectButtonstate:invitation:urn:li:member:<id>_connect"). That one
+  // is isConnectAnchor, never Pending.
   if (!a.hasAttribute('aria-label')) return false;
   if ((a.getAttribute('href') || '').includes('/preload/custom-invite/')) return false;
   if (!a.hasAttribute('componentkey')) return true;
+  if (isConnectAnchor(a)) return false;
   return /(^|[^a-z])invitation[^a-z]/i.test(a.getAttribute('componentkey'));
+}
+function isConnectAnchor(a) {
+  // The Connect control in the markup seen 2026-11-11: a labeled <a> whose
+  // componentkey names an invitation in the "_connect" state. Like the
+  // Pending check this reads an internal identifier, not translated text.
+  if (!a.hasAttribute('aria-label')) return false;
+  return /(^|[^a-z])invitation[^a-z].*_connect$/i.test(
+    a.getAttribute('componentkey') || ''
+  );
 }
 function findActionRoot(main) {
   const composeAnchors = main.querySelectorAll('a[href*="/messaging/compose/"]');
@@ -177,6 +192,8 @@ function findIncomingActionRow(main) {
 #   Searches document (not main) so a post-More-menu reread sees
 #   portal-rendered menu items. The vanityName parameter is unique to
 #   the target user, so document-wide search has no false-positive risk.
+#   Also true for a top-card Connect <a> keyed "..._connect" (seen
+#   2026-11-11), which links to the profile URL instead of the deeplink.
 # - hasComposeInActionRoot: any /messaging/compose/ anchor exists inside
 #   the action root. Scoped to main (not document) to avoid the More
 #   menu's "Send profile in a message" anchor, which is a compose URL
@@ -216,10 +233,17 @@ ACTION_SIGNALS_JS = (
   const inviteSel = `a[href*="/preload/custom-invite/?vanityName=${safe}"]`;
   const editSel = `a[href*="/in/${safe}/edit/intro/"]`;
 
-  const hasInvite = !!document.querySelector(inviteSel);
   const hasEditIntro = !!main.querySelector(editSel);
 
   const actionRoot = findActionRoot(main);
+
+  // The deeplink anchor (earlier markup, and the More menu), or the
+  // top-card Connect anchor keyed "_connect" (seen 2026-11-11). The latter
+  // is scoped to the action root, so sidebar Connect controls for other
+  // members never count.
+  const hasInvite =
+    !!document.querySelector(inviteSel) ||
+    (!!actionRoot && [...actionRoot.querySelectorAll('a')].some(isConnectAnchor));
 
   let hasComposeInActionRoot = false;
   let hasLabeledActionButton = false;

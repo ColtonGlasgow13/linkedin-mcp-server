@@ -387,6 +387,47 @@ def follow_with_save_top_card(labels: Labels) -> str:
 """
 
 
+def connectable_keyed_top_card(labels: Labels) -> str:
+    """Connect in LinkedIn's 2026-11-11 markup, as read live on three profiles.
+
+    Connect is a labeled <a> to the profile URL (no deeplink) keyed with the
+    "_connect" invitation state, next to the randomly keyed Save anchor.
+    """
+    return f"""
+<section class="topcard">
+  <h1>Donovan</h1>
+  <div class="actions">
+    <a href="https://www.linkedin.com/in/{USER}/"
+      componentkey="ConnectButtonstate:invitation:urn:li:member:501340768_connect"
+      aria-label="{labels.connect}">{labels.connect}</a>
+    <a href="/messaging/compose/?profileUrn=urn%3Ali%3Afsd_profile%3AJJJ"
+      componentkey="f5bacaf0-98c3-4937-a62f-942c5d2b3ba6"
+      aria-disabled="false">{labels.message}</a>
+    {_save_anchor(USER)}
+    <button type="button" aria-expanded="false">{labels.more}</button>
+  </div>
+</section>
+"""
+
+
+def keyed_connect_sidebar_section(labels: Labels) -> str:
+    """Sidebar Connect controls for other members, keyed the same way."""
+    return f"""
+<section class="sidebar">
+  <div class="card">
+    <a href="/messaging/compose/?profileUrn=urn%3Ali%3Afsd_profile%3AKKK"
+      aria-disabled="false">{labels.message}</a>
+    <a href="https://www.linkedin.com/in/someone-else/"
+      componentkey="ConnectButtonstate:invitation:urn:li:member:793334643_connect"
+      aria-label="{labels.connect}">{labels.connect}</a>
+    <button type="button"
+      componentkey="ConnectButtonstate:invitation:urn:li:member:43617245_connect"
+      aria-label="{labels.connect}">{labels.connect}</button>
+  </div>
+</section>
+"""
+
+
 def connectable_top_card(labels: Labels) -> str:
     """The vanityName invite anchor for *this* user, which is the write gate."""
     return f"""
@@ -559,6 +600,12 @@ async def _in_every_locale(
 STATE_CASES: tuple[tuple[str, Build, ConnectionState], ...] = (
     ("self_profile", self_top_card, "self_profile"),
     ("connectable", connectable_top_card, "connectable"),
+    ("connectable-keyed", connectable_keyed_top_card, "connectable"),
+    (
+        "connected-next-to-keyed-sidebar-connect",
+        _both(connected_with_save_top_card, keyed_connect_sidebar_section),
+        "already_connected",
+    ),
     (
         "incoming_request",
         _both(incoming_top_card, sidebar_section),
